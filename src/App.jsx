@@ -207,10 +207,10 @@ export default function App() {
 
       {/* Main layout */}
       <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-4">
-        {/* Left: EvalBar + Board */}
-        <div className="flex gap-2 shrink-0 self-center lg:self-start">
-          <EvalBar score={currentScore} isGameOver={isGameOver} turn={turn} />
-          <div className="flex flex-col items-center gap-3">
+        {/* Left: EvalBar + Board + Controls */}
+        <div className="flex flex-col items-center gap-3 shrink-0 self-center lg:self-start">
+          <div className="flex gap-2">
+            <EvalBar score={currentScore} isGameOver={isGameOver} turn={turn} />
             <Board
               position={position}
               onMove={makeMove}
@@ -218,8 +218,9 @@ export default function App() {
               lastMove={lastMove}
               pieces={customPieces}
             />
+          </div>
 
-            {/* Controls */}
+          {/* Controls */}
             <div className="flex items-center gap-1.5 md:gap-2">
               <button onClick={goToStart} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Inicio (Home)">⏮</button>
               <button onClick={goBack} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Atrás (←)">◀</button>
@@ -244,7 +245,6 @@ export default function App() {
                 </span>
               )}
             </div>
-          </div>
         </div>
 
         {/* Right: Panels */}
