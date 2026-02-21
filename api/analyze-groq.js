@@ -1,6 +1,6 @@
-import { GROQ_API_URL, SYSTEM_PROMPT, sseHeaders, cors, readBody } from './_shared.js'
+const { GROQ_API_URL, SYSTEM_PROMPT, sseHeaders, cors, readBody } = require('./_shared.js')
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   cors(res)
 
   if (req.method === 'OPTIONS') {

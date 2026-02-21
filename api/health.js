@@ -1,6 +1,6 @@
-import { CLAUDE_MODELS, GROQ_MODELS, cors } from './_shared.js'
+const { CLAUDE_MODELS, GROQ_MODELS, cors } = require('./_shared.js')
 
-export default function handler(req, res) {
+module.exports = function handler(req, res) {
   cors(res)
 
   if (req.method === 'OPTIONS') {
