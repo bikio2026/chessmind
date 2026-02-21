@@ -32,7 +32,7 @@ export default function App() {
     reset,
   } = useChessGame()
 
-  const { isReady: sfReady, isAnalyzing: sfAnalyzing, lines, analyze: sfAnalyze, engineLabel } = useStockfish()
+  const { isReady: sfReady, isAnalyzing: sfAnalyzing, lines, analyze: sfAnalyze, engineLabel, loadingStatus: sfLoadingStatus } = useStockfish()
   const heuristics = usePositionAnalysis(position)
   const {
     narrative, isAnalyzing: llmAnalyzing, error: llmError,
@@ -257,6 +257,7 @@ export default function App() {
             isGameOver={isGameOver}
             turn={turn}
             engineLabel={engineLabel}
+            loadingStatus={sfLoadingStatus}
           />
 
           <MoveList

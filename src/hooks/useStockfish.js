@@ -1,19 +1,59 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { parseInfoLine, parseBestMove } from '../lib/stockfishParser'
 
-// In production (Vercel), use lite version first (7MB vs 108MB — Vercel has ~50MB asset limit)
-// In localhost, try full version first for maximum strength
 const isLocal = typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
 
+// GitHub Release URL for full Stockfish (108MB WASM — too large for Vercel)
+const GH_RELEASE = 'https://github.com/bikio2026/chessmind/releases/download/stockfish-v18'
+
+// Variants to try, in order of preference
+// Production: full via GitHub Release (Blob Worker) → lite local fallback
+// Localhost: full local → lite local fallback
 const SF_VARIANTS = isLocal
   ? [
-      { js: '/stockfish-18-single.js', label: 'Stockfish 18' },
-      { js: '/stockfish-18-lite-single.js', label: 'Stockfish 18 Lite' },
+      { js: '/stockfish-18-single.js', label: 'Stockfish 18', type: 'local' },
+      { js: '/stockfish-18-lite-single.js', label: 'Stockfish 18 Lite', type: 'local' },
     ]
   : [
-      { js: '/stockfish-18-lite-single.js', label: 'Stockfish 18 Lite' },
+      { js: `${GH_RELEASE}/stockfish-18-single.js`, wasmUrl: `${GH_RELEASE}/stockfish-18-single.wasm`, label: 'Stockfish 18', type: 'remote' },
+      { js: '/stockfish-18-lite-single.js', label: 'Stockfish 18 Lite', type: 'local' },
     ]
+
+/**
+ * Create a Web Worker from a remote JS URL by fetching it and creating a Blob.
+ * Patches the WASM resolution to point to the given wasmUrl.
+ */
+async function createRemoteWorker(jsUrl, wasmUrl) {
+  const res = await fetch(jsUrl)
+  if (!res.ok) throw new Error(`Failed to fetch ${jsUrl}: ${res.status}`)
+  const jsText = await res.text()
+
+  // The Stockfish worker JS resolves the WASM path relative to its own URL.
+  // Since we're creating a Blob worker, self.location won't match.
+  // We prepend a shim that intercepts fetch/XMLHttpRequest for .wasm files
+  // and redirects them to our explicit wasmUrl.
+  const shim = `
+// WASM URL override for Blob Worker context
+const __WASM_URL__ = ${JSON.stringify(wasmUrl)};
+const __origFetch__ = self.fetch;
+self.fetch = function(url, opts) {
+  if (typeof url === 'string' && url.endsWith('.wasm')) {
+    return __origFetch__.call(self, __WASM_URL__, opts);
+  }
+  return __origFetch__.call(self, url, opts);
+};
+`
+
+  const blob = new Blob([shim + jsText], { type: 'application/javascript' })
+  const blobUrl = URL.createObjectURL(blob)
+  const worker = new Worker(blobUrl)
+
+  // Clean up blob URL after worker starts (it stays alive because the worker references it)
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 5000)
+
+  return worker
+}
 
 export function useStockfish() {
   const workerRef = useRef(null)
@@ -22,6 +62,7 @@ export function useStockfish() {
   const [bestMove, setBestMove] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [engineLabel, setEngineLabel] = useState('')
+  const [loadingStatus, setLoadingStatus] = useState('') // for UI feedback
   const debounceRef = useRef(null)
   const multiPvRef = useRef(3)
 
@@ -48,24 +89,41 @@ export function useStockfish() {
     let cancelled = false
     let activeWorker = null
 
-    function tryVariant(index) {
+    async function tryVariant(index) {
       if (cancelled || index >= SF_VARIANTS.length) {
         console.error('[Stockfish] All variants failed to load')
+        setLoadingStatus('Error: no se pudo cargar ningún motor')
         return
       }
 
       const variant = SF_VARIANTS[index]
-      console.log(`[Stockfish] Trying ${variant.label} (${variant.js})...`)
+      console.log(`[Stockfish] Trying ${variant.label} (${variant.type})...`)
+      setLoadingStatus(variant.type === 'remote'
+        ? `Descargando ${variant.label} (108 MB)...`
+        : `Cargando ${variant.label}...`)
 
-      const worker = new Worker(variant.js)
+      let worker
+      try {
+        if (variant.type === 'remote') {
+          worker = await createRemoteWorker(variant.js, variant.wasmUrl)
+        } else {
+          worker = new Worker(variant.js)
+        }
+      } catch (err) {
+        console.error(`[Stockfish] Failed to create ${variant.label} worker:`, err)
+        if (!cancelled) tryVariant(index + 1)
+        return
+      }
+
       activeWorker = worker
 
-      // Timeout: if no uciok within 15s, try next variant
+      // Timeout: if no uciok within 30s for remote (needs download), 15s for local
+      const timeoutMs = variant.type === 'remote' ? 30000 : 15000
       const timeout = setTimeout(() => {
-        console.warn(`[Stockfish] ${variant.label} timed out, trying fallback...`)
+        console.warn(`[Stockfish] ${variant.label} timed out after ${timeoutMs / 1000}s, trying fallback...`)
         worker.terminate()
         if (!cancelled) tryVariant(index + 1)
-      }, 15000)
+      }, timeoutMs)
 
       worker.onerror = (err) => {
         console.error(`[Stockfish] ${variant.label} worker error:`, err.message || err)
@@ -81,6 +139,7 @@ export function useStockfish() {
           clearTimeout(timeout)
           console.log(`[Stockfish] ${variant.label} initialized OK`)
           setEngineLabel(variant.label)
+          setLoadingStatus('')
           workerRef.current = worker
           worker.postMessage('isready')
         } else if (msg === 'readyok') {
@@ -173,5 +232,5 @@ export function useStockfish() {
     }
   }, [isReady])
 
-  return { isReady, isAnalyzing, lines, bestMove, analyze, stop, setMultiPV, engineLabel }
+  return { isReady, isAnalyzing, lines, bestMove, analyze, stop, setMultiPV, engineLabel, loadingStatus }
 }
