@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import { useChessGame } from './hooks/useChessGame'
 import { useStockfish } from './hooks/useStockfish'
 import { usePositionAnalysis } from './hooks/usePositionAnalysis'
@@ -291,6 +292,9 @@ export default function App() {
         onClose={() => setPgnLoaderOpen(false)}
         onLoad={loadPgn}
       />
+
+      {/* Vercel Speed Insights */}
+      <SpeedInsights />
     </div>
   )
 }
