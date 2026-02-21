@@ -1,0 +1,401 @@
+import http from 'node:http'
+import { spawn } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+
+// Load .env manually — Node's --env-file won't override vars already in the environment
+// (Claude Code sets ANTHROPIC_API_KEY="" which blocks the .env value)
+try {
+  const envContent = readFileSync(new URL('../.env', import.meta.url), 'utf8')
+  for (const line of envContent.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eqIdx = trimmed.indexOf('=')
+    if (eqIdx === -1) continue
+    const key = trimmed.slice(0, eqIdx)
+    const val = trimmed.slice(eqIdx + 1)
+    process.env[key] = val
+  }
+} catch { /* .env not found — OK, Claude just won't be available */ }
+
+const PORT = 3056
+const OLLAMA_URL = 'http://localhost:11434'
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
+const ANTHROPIC_VERSION = '2023-06-01'
+
+let ollamaProcess = null
+
+const SYSTEM_PROMPT = `Sos un Gran Maestro de ajedrez comentarista con profundo conocimiento de teoría de aperturas, estrategia posicional y técnica de finales.
+
+Reglas estrictas:
+- Respondé SIEMPRE en español rioplatense.
+- NO repitas los datos numéricos que te doy — usálos como base para construir una narrativa estratégica.
+- NO digas obviedades como "la posición está igualada" en las primeras jugadas — eso no aporta nada.
+- Cuando identifiques una apertura, usá el nombre exacto (ej: "Defensa Siciliana, variante Dragón") y explicá sus IDEAS, no solo el nombre.
+- Pensá en términos de planes, desequilibrios, estructuras de peones y actividad de piezas — no en jugadas concretas sueltas.
+- Adaptá tu análisis a la fase de la partida: en apertura enseñá sobre la apertura, en medio juego hablá de estrategia, en final hablá de técnica.
+- Sé conciso (2-3 párrafos máximo) pero perspicaz — cada oración debe agregar valor.`
+
+const CLAUDE_MODELS = [
+  { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', speed: 'rápido' },
+  { id: 'claude-sonnet-4-20250514', name: 'Sonnet 4', speed: 'equilibrado' },
+  { id: 'claude-sonnet-4-5-20250929', name: 'Sonnet 4.5', speed: 'preciso' },
+]
+
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
+const GROQ_MODELS = [
+  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', speed: 'rápido' },
+  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', speed: 'ultra rápido' },
+]
+
+function sseHeaders(res) {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  })
+}
+
+function readBody(req) {
+  return new Promise((resolve) => {
+    let body = ''
+    req.on('data', chunk => body += chunk)
+    req.on('end', () => resolve(body))
+  })
+}
+
+const server = http.createServer(async (req, res) => {
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204)
+    res.end()
+    return
+  }
+
+  // Health check — reports both Ollama and Claude availability
+  if (req.url === '/api/health' && req.method === 'GET') {
+    const result = {
+      ollama: { available: false, models: [] },
+      claude: { available: false, models: [] },
+      groq: { available: false, models: [] },
+    }
+
+    // Check Ollama
+    try {
+      const ollamaRes = await fetch(`${OLLAMA_URL}/api/tags`)
+      if (ollamaRes.ok) {
+        const data = await ollamaRes.json()
+        result.ollama.available = true
+        result.ollama.models = data.models?.map(m => m.name) || []
+      }
+    } catch { /* not available */ }
+
+    // Check Claude (API key present)
+    if (process.env.ANTHROPIC_API_KEY) {
+      result.claude.available = true
+      result.claude.models = CLAUDE_MODELS.map(m => m.id)
+    }
+
+    // Check Groq (API key present)
+    if (process.env.GROQ_API_KEY) {
+      result.groq.available = true
+      result.groq.models = GROQ_MODELS.map(m => m.id)
+    }
+
+    const status = result.ollama.available || result.claude.available || result.groq.available ? 'ok' : 'error'
+    res.writeHead(status === 'ok' ? 200 : 503, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ status, ...result }))
+    return
+  }
+
+  // Analyze with Ollama — streaming
+  if (req.url === '/api/analyze' && req.method === 'POST') {
+    const body = await readBody(req)
+    try {
+      const { prompt, model = 'llama3.2' } = JSON.parse(body)
+
+      const ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: prompt },
+          ],
+          stream: true,
+        }),
+      })
+
+      if (!ollamaRes.ok) {
+        res.writeHead(502, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Ollama returned error' }))
+        return
+      }
+
+      sseHeaders(res)
+      const reader = ollamaRes.body.getReader()
+      const decoder = new TextDecoder()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n').filter(Boolean)
+        for (const line of lines) {
+          try {
+            const json = JSON.parse(line)
+            if (json.message?.content) {
+              res.write(`data: ${JSON.stringify({ token: json.message.content })}\n\n`)
+            }
+            if (json.done) {
+              res.write(`data: ${JSON.stringify({ done: true })}\n\n`)
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+
+      res.end()
+    } catch (err) {
+      console.error('Ollama analyze error:', err.message)
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: err.message }))
+      } else {
+        res.end()
+      }
+    }
+    return
+  }
+
+  // Analyze with Claude API — streaming
+  if (req.url === '/api/analyze-claude' && req.method === 'POST') {
+    const body = await readBody(req)
+    try {
+      const { prompt, model = 'claude-haiku-4-5-20251001' } = JSON.parse(body)
+      const apiKey = process.env.ANTHROPIC_API_KEY
+
+      if (!apiKey) {
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'ANTHROPIC_API_KEY no configurada. Agregala al archivo .env' }))
+        return
+      }
+
+      const claudeRes = await fetch(ANTHROPIC_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': ANTHROPIC_VERSION,
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1024,
+          stream: true,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      })
+
+      if (!claudeRes.ok) {
+        const errText = await claudeRes.text()
+        console.error('Claude API error:', claudeRes.status, errText)
+        res.writeHead(claudeRes.status, { 'Content-Type': 'application/json' })
+        let detail = ''
+        try { detail = JSON.parse(errText).error?.message || errText.slice(0, 200) } catch { detail = errText.slice(0, 200) }
+        res.end(JSON.stringify({ error: `Claude API (${claudeRes.status}): ${detail}` }))
+        return
+      }
+
+      sseHeaders(res)
+      const reader = claudeRes.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() // keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const data = line.slice(6).trim()
+          if (data === '[DONE]') continue
+
+          try {
+            const json = JSON.parse(data)
+
+            // Claude SSE events: content_block_delta has the text tokens
+            if (json.type === 'content_block_delta' && json.delta?.text) {
+              res.write(`data: ${JSON.stringify({ token: json.delta.text })}\n\n`)
+            }
+
+            // message_stop signals completion
+            if (json.type === 'message_stop') {
+              res.write(`data: ${JSON.stringify({ done: true })}\n\n`)
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+
+      // Ensure done signal is sent
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`)
+      res.end()
+    } catch (err) {
+      console.error('Claude analyze error:', err.message)
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: err.message }))
+      } else {
+        res.end()
+      }
+    }
+    return
+  }
+
+  // Analyze with Groq API — streaming (OpenAI-compatible)
+  if (req.url === '/api/analyze-groq' && req.method === 'POST') {
+    const body = await readBody(req)
+    try {
+      const { prompt, model = 'llama-3.3-70b-versatile' } = JSON.parse(body)
+      const apiKey = process.env.GROQ_API_KEY
+
+      if (!apiKey) {
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'GROQ_API_KEY no configurada. Obtené una gratis en console.groq.com y agregala al archivo .env' }))
+        return
+      }
+
+      const groqRes = await fetch(GROQ_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1024,
+          stream: true,
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: prompt },
+          ],
+        }),
+      })
+
+      if (!groqRes.ok) {
+        const errText = await groqRes.text()
+        console.error('Groq API error:', groqRes.status, errText)
+        res.writeHead(groqRes.status, { 'Content-Type': 'application/json' })
+        let detail = ''
+        try { detail = JSON.parse(errText).error?.message || errText.slice(0, 200) } catch { detail = errText.slice(0, 200) }
+        res.end(JSON.stringify({ error: `Groq API (${groqRes.status}): ${detail}` }))
+        return
+      }
+
+      sseHeaders(res)
+      const reader = groqRes.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop()
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const data = line.slice(6).trim()
+          if (data === '[DONE]') {
+            res.write(`data: ${JSON.stringify({ done: true })}\n\n`)
+            continue
+          }
+
+          try {
+            const json = JSON.parse(data)
+            const content = json.choices?.[0]?.delta?.content
+            if (content) {
+              res.write(`data: ${JSON.stringify({ token: content })}\n\n`)
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`)
+      res.end()
+    } catch (err) {
+      console.error('Groq analyze error:', err.message)
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: err.message }))
+      } else {
+        res.end()
+      }
+    }
+    return
+  }
+
+  // Start Ollama
+  if (req.url === '/api/start-ollama' && req.method === 'POST') {
+    try {
+      const check = await fetch(`${OLLAMA_URL}/api/tags`)
+      if (check.ok) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ status: 'already_running' }))
+        return
+      }
+    } catch { /* not running */ }
+
+    try {
+      if (ollamaProcess) {
+        try { ollamaProcess.kill() } catch {}
+        ollamaProcess = null
+      }
+
+      ollamaProcess = spawn('ollama', ['serve'], {
+        detached: true,
+        stdio: 'ignore',
+      })
+      ollamaProcess.unref()
+      ollamaProcess.on('error', (err) => {
+        console.error('Failed to start Ollama:', err.message)
+        ollamaProcess = null
+      })
+
+      await new Promise(r => setTimeout(r, 2000))
+
+      const verify = await fetch(`${OLLAMA_URL}/api/tags`)
+      if (verify.ok) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ status: 'started' }))
+      } else {
+        throw new Error('Not responding after start')
+      }
+    } catch {
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ status: 'error', message: 'Ollama no respondió después de iniciar. Verificá que esté instalado.' }))
+    }
+    return
+  }
+
+  // 404
+  res.writeHead(404, { 'Content-Type': 'application/json' })
+  res.end(JSON.stringify({ error: 'Not found' }))
+})
+
+server.listen(PORT, () => {
+  console.log(`ChessMind API proxy running on http://localhost:${PORT}`)
+  console.log(`Ollama target: ${OLLAMA_URL}`)
+  console.log(`Claude API: ${process.env.ANTHROPIC_API_KEY ? 'configured' : 'not configured (set ANTHROPIC_API_KEY in .env)'}`)
+  console.log(`Groq API: ${process.env.GROQ_API_KEY ? 'configured' : 'not configured (set GROQ_API_KEY in .env)'}`)
+})

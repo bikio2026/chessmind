@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --color-surface: #1a1a2e;
+  --color-surface-alt: #16213e;
+  --color-surface-light: #0f3460;
+  --color-accent: #e94560;
+  --color-accent-soft: #533483;
+  --color-text: #eaeaea;
+  --color-text-dim: #8892a4;
+  --color-text-muted: #5a6377;
+  --color-eval-white: #f0f0f0;
+  --color-eval-black: #2a2a2a;
+  --color-move-good: #4ade80;
+  --color-move-bad: #f87171;
+  --color-move-book: #a78bfa;
+  --color-highlight: rgba(233, 69, 96, 0.3);
+  --font-sans: system-ui, -apple-system, sans-serif;
+  --font-mono: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-surface-alt);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-text-muted);
+  border-radius: 3px;
+}
+
+.pixel-piece {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 1.5s ease-in-out infinite;
+}
