@@ -42,13 +42,8 @@ export function SemanticPanel({
 }) {
   const [starting, setStarting] = useState(false)
 
-  const isAvailable = llmProvider === 'claude'
-    ? providerStatus.claude
-    : providerStatus.ollama
-
-  const isChecking = llmProvider === 'claude'
-    ? providerStatus.claude === null
-    : providerStatus.ollama === null
+  const isAvailable = providerStatus[llmProvider] ?? null
+  const isChecking = providerStatus[llmProvider] === null
 
   async function handleStartOllama() {
     setStarting(true)
