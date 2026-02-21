@@ -3,7 +3,7 @@ import { Chess } from 'chess.js'
 import { formatScore, pvToSan } from '../lib/stockfishParser'
 import { Cpu, Loader2, Crown, Handshake } from 'lucide-react'
 
-export function EnginePanel({ lines, isAnalyzing, isReady, currentFen, isGameOver, turn }) {
+export function EnginePanel({ lines, isAnalyzing, isReady, currentFen, isGameOver, turn, engineLabel }) {
   // Convert PV lines from UCI to SAN
   const displayLines = useMemo(() => {
     return lines.map(line => {
@@ -25,8 +25,11 @@ export function EnginePanel({ lines, isAnalyzing, isReady, currentFen, isGameOve
         </h2>
         <div className="flex items-center gap-2 text-text-muted text-sm">
           <Loader2 size={14} className="animate-spin" />
-          Cargando Stockfish...
+          Cargando Stockfish... (puede tardar unos segundos)
         </div>
+        <p className="text-xs text-text-muted mt-1 opacity-60">
+          Si tarda más de 15s, se intentará con la versión lite
+        </p>
       </div>
     )
   }
@@ -35,7 +38,7 @@ export function EnginePanel({ lines, isAnalyzing, isReady, currentFen, isGameOve
     <div className="bg-surface-alt rounded-lg p-3">
       <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 flex items-center gap-1.5">
         <Cpu size={14} />
-        Motor de Análisis
+        {engineLabel || 'Motor de Análisis'}
         {isAnalyzing && (
           <Loader2 size={12} className="animate-spin text-accent" />
         )}

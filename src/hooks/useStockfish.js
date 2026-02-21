@@ -1,12 +1,27 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { parseInfoLine, parseBestMove } from '../lib/stockfishParser'
 
+// In production (Vercel), use lite version first (7MB vs 108MB — Vercel has ~50MB asset limit)
+// In localhost, try full version first for maximum strength
+const isLocal = typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+
+const SF_VARIANTS = isLocal
+  ? [
+      { js: '/stockfish-18-single.js', label: 'Stockfish 18' },
+      { js: '/stockfish-18-lite-single.js', label: 'Stockfish 18 Lite' },
+    ]
+  : [
+      { js: '/stockfish-18-lite-single.js', label: 'Stockfish 18 Lite' },
+    ]
+
 export function useStockfish() {
   const workerRef = useRef(null)
   const [isReady, setIsReady] = useState(false)
   const [lines, setLines] = useState([])
   const [bestMove, setBestMove] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [engineLabel, setEngineLabel] = useState('')
   const debounceRef = useRef(null)
   const multiPvRef = useRef(3)
 
@@ -28,54 +43,89 @@ export function useStockfish() {
     worker.postMessage(`go depth ${depth}`)
   }
 
-  // Initialize worker
+  // Initialize worker with fallback
   useEffect(() => {
-    const worker = new Worker('/stockfish-18-single.js')
-    workerRef.current = worker
+    let cancelled = false
+    let activeWorker = null
 
-    worker.onmessage = (e) => {
-      const msg = typeof e.data === 'string' ? e.data : e.data?.toString() || ''
+    function tryVariant(index) {
+      if (cancelled || index >= SF_VARIANTS.length) {
+        console.error('[Stockfish] All variants failed to load')
+        return
+      }
 
-      if (msg === 'uciok') {
-        worker.postMessage('isready')
-      } else if (msg === 'readyok') {
-        setIsReady(true)
-      } else if (msg.startsWith('info') && msg.includes(' pv ')) {
-        const parsed = parseInfoLine(msg)
-        if (parsed && parsed.score) {
-          // Normalize score to White's perspective (Stockfish reports from side-to-move)
-          if (turnRef.current === 'b') {
-            parsed.score.value = -parsed.score.value
-            if (parsed.wdl) {
-              const { win, loss } = parsed.wdl
-              parsed.wdl.win = loss
-              parsed.wdl.loss = win
+      const variant = SF_VARIANTS[index]
+      console.log(`[Stockfish] Trying ${variant.label} (${variant.js})...`)
+
+      const worker = new Worker(variant.js)
+      activeWorker = worker
+
+      // Timeout: if no uciok within 15s, try next variant
+      const timeout = setTimeout(() => {
+        console.warn(`[Stockfish] ${variant.label} timed out, trying fallback...`)
+        worker.terminate()
+        if (!cancelled) tryVariant(index + 1)
+      }, 15000)
+
+      worker.onerror = (err) => {
+        console.error(`[Stockfish] ${variant.label} worker error:`, err.message || err)
+        clearTimeout(timeout)
+        worker.terminate()
+        if (!cancelled) tryVariant(index + 1)
+      }
+
+      worker.onmessage = (e) => {
+        const msg = typeof e.data === 'string' ? e.data : e.data?.toString() || ''
+
+        if (msg === 'uciok') {
+          clearTimeout(timeout)
+          console.log(`[Stockfish] ${variant.label} initialized OK`)
+          setEngineLabel(variant.label)
+          workerRef.current = worker
+          worker.postMessage('isready')
+        } else if (msg === 'readyok') {
+          console.log(`[Stockfish] ${variant.label} ready`)
+          setIsReady(true)
+        } else if (msg.startsWith('info') && msg.includes(' pv ')) {
+          const parsed = parseInfoLine(msg)
+          if (parsed && parsed.score) {
+            // Normalize score to White's perspective (Stockfish reports from side-to-move)
+            if (turnRef.current === 'b') {
+              parsed.score.value = -parsed.score.value
+              if (parsed.wdl) {
+                const { win, loss } = parsed.wdl
+                parsed.wdl.win = loss
+                parsed.wdl.loss = win
+              }
             }
+            pvAccRef.current[parsed.multipv] = parsed
+            const sortedLines = Object.values(pvAccRef.current)
+              .sort((a, b) => a.multipv - b.multipv)
+            setLines([...sortedLines])
           }
-          pvAccRef.current[parsed.multipv] = parsed
-          const sortedLines = Object.values(pvAccRef.current)
-            .sort((a, b) => a.multipv - b.multipv)
-          setLines([...sortedLines])
-        }
-      } else if (msg.startsWith('bestmove')) {
-        const parsed = parseBestMove(msg)
-        setBestMove(parsed?.bestMove || null)
-        isSearchingRef.current = false
-        setIsAnalyzing(false)
+        } else if (msg.startsWith('bestmove')) {
+          const parsed = parseBestMove(msg)
+          setBestMove(parsed?.bestMove || null)
+          isSearchingRef.current = false
+          setIsAnalyzing(false)
 
-        // If there's a pending analysis, start it now
-        const pending = pendingRef.current
-        if (pending) {
-          pendingRef.current = null
-          startSearch(worker, pending.fen, pending.depth)
+          // If there's a pending analysis, start it now
+          const pending = pendingRef.current
+          if (pending) {
+            pendingRef.current = null
+            startSearch(worker, pending.fen, pending.depth)
+          }
         }
       }
+
+      worker.postMessage('uci')
     }
 
-    worker.postMessage('uci')
+    tryVariant(0)
 
     return () => {
-      worker.terminate()
+      cancelled = true
+      if (activeWorker) activeWorker.terminate()
     }
   }, [])
 
@@ -123,5 +173,5 @@ export function useStockfish() {
     }
   }, [isReady])
 
-  return { isReady, isAnalyzing, lines, bestMove, analyze, stop, setMultiPV }
+  return { isReady, isAnalyzing, lines, bestMove, analyze, stop, setMultiPV, engineLabel }
 }

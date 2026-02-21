@@ -13,6 +13,9 @@ dist-ssr
 *.local
 .env
 
+# Large Stockfish WASM (108MB) — only lite version goes to production
+public/stockfish-18-single.wasm
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
