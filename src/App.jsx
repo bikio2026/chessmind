@@ -14,6 +14,7 @@ import { PgnLoader } from './components/PgnLoader'
 import { PieceThemeSelector } from './components/PieceThemeSelector'
 import { LLMSelector } from './components/LLMSelector'
 import { RotateCcw, FlipVertical2, FileText, Brain } from 'lucide-react'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 
 export default function App() {
   const {
@@ -291,6 +292,7 @@ export default function App() {
         onClose={() => setPgnLoaderOpen(false)}
         onLoad={loadPgn}
       />
+      <SpeedInsights />
     </div>
   )
 }
