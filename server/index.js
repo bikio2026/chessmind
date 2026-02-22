@@ -24,16 +24,9 @@ const ANTHROPIC_VERSION = '2023-06-01'
 
 let ollamaProcess = null
 
-const SYSTEM_PROMPT = `Sos un Gran Maestro de ajedrez comentarista con profundo conocimiento de teoría de aperturas, estrategia posicional y técnica de finales.
+const SYSTEM_PROMPT = `GM comentarista de ajedrez. Español rioplatense. MÁXIMO 3-4 oraciones, ~80 palabras. Un párrafo. Sin listas, sin markdown.
 
-Reglas estrictas:
-- Respondé SIEMPRE en español rioplatense.
-- NO repitas los datos numéricos que te doy — usálos como base para construir una narrativa estratégica.
-- NO digas obviedades como "la posición está igualada" en las primeras jugadas — eso no aporta nada.
-- Cuando identifiques una apertura, usá el nombre exacto (ej: "Defensa Siciliana, variante Dragón") y explicá sus IDEAS, no solo el nombre.
-- Pensá en términos de planes, desequilibrios, estructuras de peones y actividad de piezas — no en jugadas concretas sueltas.
-- Adaptá tu análisis a la fase de la partida: en apertura enseñá sobre la apertura, en medio juego hablá de estrategia, en final hablá de técnica.
-- Sé conciso (2-3 párrafos máximo) pero perspicaz — cada oración debe agregar valor.`
+Usá los datos del motor como base pero NO los repitas. Construí una narrativa sobre IDEAS y PLANES. Cada oración debe aportar insight que un jugador de club no vería solo. Si hay ventaja decisiva, explicá POR QUÉ. NUNCA digas "igualado" en aperturas. NUNCA hables de centro en finales.`
 
 const CLAUDE_MODELS = [
   { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', speed: 'rápido' },
@@ -127,6 +120,7 @@ const server = http.createServer(async (req, res) => {
             { role: 'user', content: prompt },
           ],
           stream: true,
+          options: { num_predict: 300 },
         }),
       })
 
@@ -281,7 +275,7 @@ const server = http.createServer(async (req, res) => {
         },
         body: JSON.stringify({
           model,
-          max_tokens: 1024,
+          max_tokens: 300,
           stream: true,
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },

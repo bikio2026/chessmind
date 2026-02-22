@@ -31,7 +31,7 @@ module.exports = async function handler(req, res) {
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1024,
+        max_tokens: 300,
         stream: true,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },

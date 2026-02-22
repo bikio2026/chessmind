@@ -4,6 +4,8 @@ import { useStockfish } from './hooks/useStockfish'
 import { usePositionAnalysis } from './hooks/usePositionAnalysis'
 import { useSemanticAnalysis } from './hooks/useSemanticAnalysis'
 import { buildAnalysisPrompt } from './lib/promptBuilder'
+import { pvToSan } from './lib/stockfishParser'
+import { Chess } from 'chess.js'
 import { THEMES, DEFAULT_THEME } from './lib/pieceThemes.jsx'
 import { Board } from './components/Board'
 import { MoveList } from './components/MoveList'
@@ -62,9 +64,9 @@ export default function App() {
   const lastMove = currentMoveIndex >= 0 ? history[currentMoveIndex] : null
   const currentScore = lines[0]?.score || null
 
-  // Ref to access latest lines[0] without triggering effects
-  const linesRef = useRef(null)
-  linesRef.current = lines[0] || null
+  // Ref to access latest Stockfish lines without triggering effects
+  const linesRef = useRef([])
+  linesRef.current = lines || []
 
   // Is the selected provider available?
   const isProviderAvailable = providerStatus[llmProvider] ?? null
@@ -126,9 +128,15 @@ export default function App() {
       ? history.slice(0, currentMoveIndex + 1)
       : []
 
+    // Convert Stockfish PV lines to SAN for the LLM
+    const sfLines = linesRef.current.map(line => ({
+      ...line,
+      pvSan: line.pv?.length ? pvToSan(Chess, pos, line.pv, 6) : [],
+    }))
+
     const prompt = buildAnalysisPrompt({
       fen: pos, turn, lastMove,
-      evaluation: linesRef.current, heuristics: h, fullHistory,
+      lines: sfLines, heuristics: h, fullHistory,
     })
 
     llmAnalyze(prompt, forceCacheKey || pos, llmProvider, llmModel || undefined)
