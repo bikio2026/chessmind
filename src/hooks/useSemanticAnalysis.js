@@ -37,12 +37,12 @@ export function useSemanticAnalysis() {
     }
   }, [])
 
-  const analyze = useCallback((prompt, fen, provider = 'ollama', model) => {
+  const analyze = useCallback((prompt, fen, provider = 'ollama', model, promptVersion = 'v1') => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
 
     debounceRef.current = setTimeout(async () => {
       // Cache key includes provider to avoid mixing results
-      const cacheKey = `${provider}:${fen}`
+      const cacheKey = `${provider}:${promptVersion}:${fen}`
 
       if (cacheRef.current.has(cacheKey)) {
         setNarrative(cacheRef.current.get(cacheKey))
@@ -63,7 +63,7 @@ export function useSemanticAnalysis() {
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt, model }),
+          body: JSON.stringify({ prompt, model, promptVersion }),
           signal: controller.signal,
         })
 

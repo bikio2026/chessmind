@@ -1,4 +1,4 @@
-const { GROQ_API_URL, SYSTEM_PROMPT, sseHeaders, cors, readBody } = require('./_shared.js')
+const { GROQ_API_URL, getSystemPrompt, sseHeaders, cors, readBody } = require('./_shared.js')
 
 module.exports = async function handler(req, res) {
   cors(res)
@@ -15,7 +15,8 @@ module.exports = async function handler(req, res) {
 
   const body = await readBody(req)
   try {
-    const { prompt, model = 'llama-3.3-70b-versatile' } = JSON.parse(body)
+    const { prompt, model = 'llama-3.3-70b-versatile', promptVersion = 'v1' } = JSON.parse(body)
+    const systemPrompt = getSystemPrompt(promptVersion)
     const apiKey = process.env.GROQ_API_KEY
 
     if (!apiKey) {
@@ -34,7 +35,7 @@ module.exports = async function handler(req, res) {
         max_tokens: 300,
         stream: true,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: prompt },
         ],
       }),

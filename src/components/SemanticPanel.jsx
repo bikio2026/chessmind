@@ -39,6 +39,7 @@ export function SemanticPanel({
   narrative, isAnalyzing, error,
   providerStatus, llmProvider, llmModel,
   semanticEnabled, onRefresh, onStartOllama,
+  promptVersion, promptVersions, onPromptVersionChange,
 }) {
   const [starting, setStarting] = useState(false)
 
@@ -145,6 +146,8 @@ export function SemanticPanel({
     )
   }
 
+  const versionInfo = promptVersions?.find(v => v.id === promptVersion)
+
   // Normal active state
   return (
     <div className="bg-surface-alt rounded-lg p-4">
@@ -152,6 +155,18 @@ export function SemanticPanel({
         <Brain size={14} />
         Análisis Semántico
         {modelBadge(llmProvider, llmModel)}
+        {promptVersions && promptVersions.length > 1 && (
+          <select
+            value={promptVersion}
+            onChange={e => onPromptVersionChange?.(e.target.value)}
+            className="text-[10px] bg-surface px-1.5 py-0.5 rounded border border-surface-light text-text-dim cursor-pointer hover:text-text transition-colors"
+            title={versionInfo?.description || ''}
+          >
+            {promptVersions.map(v => (
+              <option key={v.id} value={v.id}>{v.name}</option>
+            ))}
+          </select>
+        )}
         {isAnalyzing && <Loader2 size={12} className="animate-spin text-accent" />}
         {narrative && !isAnalyzing && (
           <button

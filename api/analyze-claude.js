@@ -1,4 +1,4 @@
-const { ANTHROPIC_API_URL, ANTHROPIC_VERSION, SYSTEM_PROMPT, sseHeaders, cors, readBody } = require('./_shared.js')
+const { ANTHROPIC_API_URL, ANTHROPIC_VERSION, getSystemPrompt, sseHeaders, cors, readBody } = require('./_shared.js')
 
 module.exports = async function handler(req, res) {
   cors(res)
@@ -15,7 +15,8 @@ module.exports = async function handler(req, res) {
 
   const body = await readBody(req)
   try {
-    const { prompt, model = 'claude-haiku-4-5-20251001' } = JSON.parse(body)
+    const { prompt, model = 'claude-haiku-4-5-20251001', promptVersion = 'v1' } = JSON.parse(body)
+    const systemPrompt = getSystemPrompt(promptVersion)
     const apiKey = process.env.ANTHROPIC_API_KEY
 
     if (!apiKey) {
@@ -34,7 +35,7 @@ module.exports = async function handler(req, res) {
         model,
         max_tokens: 1024,
         stream: true,
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         messages: [{ role: 'user', content: prompt }],
       }),
     })

@@ -4,6 +4,7 @@ import { useStockfish } from './hooks/useStockfish'
 import { usePositionAnalysis } from './hooks/usePositionAnalysis'
 import { useSemanticAnalysis } from './hooks/useSemanticAnalysis'
 import { buildAnalysisPrompt } from './lib/promptBuilder'
+import { PROMPT_VERSIONS, DEFAULT_VERSION } from './lib/promptVersions'
 import { pvToSan } from './lib/stockfishParser'
 import { Chess } from 'chess.js'
 import { THEMES, DEFAULT_THEME } from './lib/pieceThemes.jsx'
@@ -60,6 +61,9 @@ export default function App() {
   const [llmModel, setLlmModel] = useState(() => {
     return localStorage.getItem('chessmind-llm-model') || ''
   })
+  const [promptVersion, setPromptVersion] = useState(() => {
+    return localStorage.getItem('chessmind-prompt-version') || DEFAULT_VERSION
+  })
 
   const lastMove = currentMoveIndex >= 0 ? history[currentMoveIndex] : null
   const currentScore = lines[0]?.score || null
@@ -102,6 +106,12 @@ export default function App() {
     clearNarrative()
   }
 
+  function handlePromptVersionChange(version) {
+    setPromptVersion(version)
+    localStorage.setItem('chessmind-prompt-version', version)
+    clearNarrative()
+  }
+
   // Don't auto-analyze the starting position (no moves played/loaded)
   const hasMoves = currentMoveIndex >= 0 || history.length > 0
 
@@ -139,8 +149,8 @@ export default function App() {
       lines: sfLines, heuristics: h, fullHistory,
     })
 
-    llmAnalyze(prompt, forceCacheKey || pos, llmProvider, llmModel || undefined)
-  }, [heuristics, currentMoveIndex, history, turn, lastMove, llmAnalyze, llmProvider, llmModel])
+    llmAnalyze(prompt, forceCacheKey || pos, llmProvider, llmModel || undefined, promptVersion)
+  }, [heuristics, currentMoveIndex, history, turn, lastMove, llmAnalyze, llmProvider, llmModel, promptVersion])
 
   // Auto-analyze with LLM when position changes (only if enabled + available + has moves)
   useEffect(() => {
@@ -284,6 +294,9 @@ export default function App() {
             semanticEnabled={semanticEnabled}
             onRefresh={handleRefreshSemantic}
             onStartOllama={startOllama}
+            promptVersion={promptVersion}
+            promptVersions={PROMPT_VERSIONS}
+            onPromptVersionChange={handlePromptVersionChange}
           />
         </div>
       </div>
