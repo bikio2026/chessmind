@@ -1,8 +1,11 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Chess } from 'chess.js'
 import { Board } from '../Board'
 import { TrainerMoveList } from './TrainerMoveList'
+import { TrainerFeedbackPanel } from './TrainerFeedbackPanel'
 import { CLASSIFICATIONS } from '../../hooks/useTrainerEngine'
+import { useTrainerLLM } from '../../hooks/useTrainerLLM'
+import { buildTrainerPrompt } from '../../lib/trainerPromptBuilder'
 import { THEMES, DEFAULT_THEME } from '../../lib/pieceThemes.jsx'
 import { ArrowLeft, BookOpen, Flag, Zap, Loader2, Lightbulb, Eye, EyeOff } from 'lucide-react'
 
@@ -55,6 +58,40 @@ export function TrainerSession({
     const theme = THEMES[pieceTheme]
     return theme?.getPieces() || undefined
   }, [pieceTheme])
+
+  // ── LLM semantic feedback ──
+  const llm = useTrainerLLM()
+  const lastAnalyzedRef = useRef(null)
+
+  // Trigger LLM analysis when pendingFeedback changes (new player move evaluated)
+  useEffect(() => {
+    if (!pendingFeedback || !opening) return
+    // Don't re-analyze the same move
+    if (lastAnalyzedRef.current === pendingFeedback.moveIndex) return
+    lastAnalyzedRef.current = pendingFeedback.moveIndex
+
+    const cls = pendingFeedback.evaluation?.classification
+    if (!cls) return
+
+    const moveNumber = Math.floor(pendingFeedback.moveIndex / 2) + 1
+    const side = playerColor === 'white' ? 'Blancas' : 'Negras'
+
+    const prompt = buildTrainerPrompt({
+      opening,
+      moveNumber,
+      side,
+      playedMove: pendingFeedback.movePlayed,
+      bestMove: pendingFeedback.bestMove || pendingFeedback.movePlayed,
+      classification: cls,
+      cpLoss: pendingFeedback.evaluation.scoreDiff || 0,
+      fen: position, // current position (after the move)
+      history,
+      isDeviation: !!deviationInfo && deviationInfo.moveIndex === pendingFeedback.moveIndex,
+      expectedTheoryMove: deviationInfo?.expectedMove,
+    })
+
+    llm.analyze(prompt)
+  }, [pendingFeedback, opening, playerColor, position, history, deviationInfo])
 
   // Synchronous move wrapper — Board's onDrop needs sync return value
   const handleMove = useCallback((from, to, promotion) => {
@@ -168,6 +205,13 @@ export function TrainerSession({
           {feedback && feedbackInfo && (
             <FeedbackCard feedback={feedback} info={feedbackInfo} />
           )}
+
+          {/* LLM Semantic Feedback */}
+          <TrainerFeedbackPanel
+            narrative={llm.narrative}
+            isAnalyzing={llm.isAnalyzing}
+            error={llm.error}
+          />
 
           {/* Move List */}
           <TrainerMoveList

@@ -21,6 +21,10 @@ MEDIO JUEGO (posición con alfiles vs caballos, estructura cerrada):
 
 FINAL (torres con peón de ventaja en flanco de rey):
 "Final de torres técnicamente ganable: la clave es llevar el rey a f5 apoyando el peón pasado mientras la torre corta al rey negro en la columna c. Si las blancas logran el peón en séptima con el rey cerca, es Lucena y ganan; si las negras activan la torre lateralmente a tiempo, defienden por Philidor."`,
+
+  trainer: `Instructor de ajedrez. Español rioplatense. ESTRICTO: máximo 2 oraciones, 40-60 palabras. Un solo párrafo. Sin listas, sin markdown, sin títulos.
+
+Explicá la CONSECUENCIA CONCRETA de la jugada: qué se pierde, qué se deja de ganar, o qué se logra. Usá variantes cortas cuando sea útil ("si ...Te8 entonces Cd5 gana material"). No repitas los datos del prompt. Sé conciso: si sobrepasás 60 palabras, fallaste.`,
 }
 
 function getSystemPrompt(version) {
