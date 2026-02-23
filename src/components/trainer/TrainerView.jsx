@@ -1,8 +1,12 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useTrainerEngine } from '../../hooks/useTrainerEngine'
 import { useOpeningTrainer } from '../../hooks/useOpeningTrainer'
+import { useTrainerLLM } from '../../hooks/useTrainerLLM'
+import { useTrainerData } from '../../hooks/useTrainerData'
+import { buildSummaryPrompt } from '../../lib/trainerPromptBuilder'
 import { OpeningSelector } from './OpeningSelector'
 import { TrainerSession } from './TrainerSession'
+import { TrainerFeedbackPanel } from './TrainerFeedbackPanel'
 import { CLASSIFICATIONS } from '../../hooks/useTrainerEngine'
 import { BookOpen, ArrowLeft, Trophy, Target, AlertTriangle } from 'lucide-react'
 
@@ -13,10 +17,35 @@ import { BookOpen, ArrowLeft, Trophy, Target, AlertTriangle } from 'lucide-react
 export function TrainerView() {
   const trainerEngine = useTrainerEngine()
   const trainer = useOpeningTrainer({ trainerEngine })
+  const summaryLLM = useTrainerLLM()
+  const { saveSession, getOpeningStats } = useTrainerData()
+
+  // Track whether we already saved/analyzed this summary
+  const savedRef = useRef(null)
 
   const handleSelectOpening = useCallback((opening) => {
     trainer.startSession(opening)
-  }, [trainer.startSession])
+    summaryLLM.clear()
+    savedRef.current = null
+  }, [trainer.startSession, summaryLLM.clear])
+
+  // When entering summary phase: save session + trigger LLM narrative
+  useEffect(() => {
+    if (trainer.phase !== 'summary' || !trainer.sessionSummary) return
+    // Only save/analyze once per summary
+    const summaryId = trainer.sessionSummary.movesPgn
+    if (savedRef.current === summaryId) return
+    savedRef.current = summaryId
+
+    // Save to localStorage
+    saveSession(trainer.sessionSummary)
+
+    // Generate LLM narrative
+    const prompt = buildSummaryPrompt(trainer.sessionSummary)
+    if (prompt) {
+      summaryLLM.analyze(prompt, { promptVersion: 'trainerSummary' })
+    }
+  }, [trainer.phase, trainer.sessionSummary])
 
   // Phase: select
   if (trainer.phase === 'select') {
@@ -33,7 +62,7 @@ export function TrainerView() {
           </div>
         </div>
 
-        <OpeningSelector onSelect={handleSelectOpening} />
+        <OpeningSelector onSelect={handleSelectOpening} getOpeningStats={getOpeningStats} />
       </div>
     )
   }
@@ -115,6 +144,13 @@ export function TrainerView() {
               </div>
             )}
 
+            {/* LLM Summary Narrative */}
+            <TrainerFeedbackPanel
+              narrative={summaryLLM.narrative}
+              isAnalyzing={summaryLLM.isAnalyzing}
+              error={summaryLLM.error}
+            />
+
             {/* Deviation info */}
             {summary.deviationInfo && (
               <div className="text-xs text-text-dim text-center">
@@ -131,7 +167,7 @@ export function TrainerView() {
         {/* Actions */}
         <div className="flex items-center gap-3 mt-6">
           <button
-            onClick={() => trainer.startSession(summary?.opening)}
+            onClick={() => handleSelectOpening(summary?.opening)}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent hover:bg-accent/90 text-white font-semibold rounded-lg transition-colors text-sm"
           >
             <Target size={16} />

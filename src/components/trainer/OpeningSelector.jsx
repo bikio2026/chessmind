@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
 import { OPENINGS, OPENING_CATEGORIES, getOpeningsByCategory } from '../../data/openings'
-import { Search, BookOpen, Swords, ChevronRight, X } from 'lucide-react'
+import { Search, BookOpen, Swords, ChevronRight, X, BarChart3 } from 'lucide-react'
 
-export function OpeningSelector({ onSelect }) {
+export function OpeningSelector({ onSelect, getOpeningStats }) {
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState(null)
 
@@ -56,6 +56,7 @@ export function OpeningSelector({ onSelect }) {
                 opening={opening}
                 isSelected={selectedId === opening.id}
                 onClick={() => setSelectedId(opening.id)}
+                stats={getOpeningStats?.(opening.id)}
               />
             ))}
             {filtered.length === 0 && (
@@ -83,6 +84,7 @@ export function OpeningSelector({ onSelect }) {
                         opening={opening}
                         isSelected={selectedId === opening.id}
                         onClick={() => setSelectedId(opening.id)}
+                        stats={getOpeningStats?.(opening.id)}
                       />
                     ))}
                   </div>
@@ -96,7 +98,7 @@ export function OpeningSelector({ onSelect }) {
       {/* Right: Opening Detail */}
       <div className="lg:w-[380px] shrink-0">
         {selected ? (
-          <OpeningDetail opening={selected} onStart={onSelect} />
+          <OpeningDetail opening={selected} onStart={onSelect} stats={getOpeningStats?.(selected.id)} />
         ) : (
           <div className="bg-surface-alt rounded-xl p-6 text-center border border-surface-light/50">
             <BookOpen size={40} className="mx-auto text-text-muted mb-3 opacity-50" />
@@ -108,7 +110,7 @@ export function OpeningSelector({ onSelect }) {
   )
 }
 
-function OpeningCard({ opening, isSelected, onClick }) {
+function OpeningCard({ opening, isSelected, onClick, stats }) {
   return (
     <button
       onClick={onClick}
@@ -135,12 +137,24 @@ function OpeningCard({ opening, isSelected, onClick }) {
         </p>
       </div>
 
+      {/* Stats badge (if played before) */}
+      {stats && (
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-[10px] font-medium text-accent">
+            {Math.round(stats.avgAccuracy * 100)}%
+          </span>
+          <span className="text-[9px] text-text-muted">
+            ×{stats.sessionsPlayed}
+          </span>
+        </div>
+      )}
+
       <ChevronRight size={14} className={`shrink-0 transition-colors ${isSelected ? 'text-accent' : 'text-text-muted group-hover:text-text-dim'}`} />
     </button>
   )
 }
 
-function OpeningDetail({ opening, onStart }) {
+function OpeningDetail({ opening, onStart, stats }) {
   return (
     <div className="bg-surface-alt rounded-xl border border-surface-light/50 overflow-hidden">
       {/* Header */}
@@ -156,6 +170,30 @@ function OpeningDetail({ opening, onStart }) {
           Jugás con {opening.color === 'white' ? 'blancas' : 'negras'}
         </p>
       </div>
+
+      {/* Stats (if played before) */}
+      {stats && (
+        <div className="px-5 py-3 border-b border-surface-light/50 bg-surface/50">
+          <div className="flex items-center gap-1.5 mb-2">
+            <BarChart3 size={11} className="text-accent" />
+            <span className="text-[11px] font-semibold text-accent uppercase tracking-wider">Tu progreso</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div>
+              <p className="text-lg font-bold text-text">{stats.sessionsPlayed}</p>
+              <p className="text-[10px] text-text-muted">Sesiones</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-accent">{Math.round(stats.avgAccuracy * 100)}%</p>
+              <p className="text-[10px] text-text-muted">Precisión</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-move-book">{Math.round(stats.bestAccuracy * 100)}%</p>
+              <p className="text-[10px] text-text-muted">Mejor</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="px-5 py-4 space-y-4 max-h-[60vh] overflow-y-auto">

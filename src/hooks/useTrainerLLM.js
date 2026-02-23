@@ -12,7 +12,7 @@ export function useTrainerLLM() {
   const [error, setError] = useState(null)
   const abortRef = useRef(null)
 
-  const analyze = useCallback(async (prompt) => {
+  const analyze = useCallback(async (prompt, { promptVersion = 'trainer' } = {}) => {
     // Read shared provider/model settings
     let provider = localStorage.getItem('chessmind-llm-provider') || 'claude'
     let model = localStorage.getItem('chessmind-llm-model') || ''
@@ -46,7 +46,7 @@ export function useTrainerLLM() {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, model, promptVersion: 'trainer' }),
+        body: JSON.stringify({ prompt, model, promptVersion }),
         signal: controller.signal,
       })
 

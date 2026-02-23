@@ -1,7 +1,8 @@
 /**
- * Prompt builder for the Opening Trainer's per-move LLM feedback.
- * Unlike the analyzer's promptBuilder (full position analysis),
- * this focuses on explaining a SINGLE move in the context of the opening.
+ * Prompt builder for the Opening Trainer.
+ * Two types of prompts:
+ *   1. buildTrainerPrompt — per-move feedback (used during play)
+ *   2. buildSummaryPrompt — session summary narrative (used after the game)
  */
 
 /**
@@ -106,4 +107,46 @@ Mejor jugada del motor: ${bestMove}
 Partida: ${historyStr}
 
 Explicá por qué ${bestMove} era mejor que ${playedMove}. ¿Qué pierde o qué deja de ganar el jugador con ${playedMove}?`
+}
+
+/**
+ * Build a summary prompt for the end-of-session LLM narrative.
+ *
+ * @param {Object} summary — The session summary object from useOpeningTrainer
+ */
+export function buildSummaryPrompt(summary) {
+  if (!summary) return null
+
+  const { opening, playerColor, accuracy, totalMoves, classifications, keyMoments, deviationInfo, theoryDepth, movesPgn } = summary
+  const side = playerColor === 'white' ? 'Blancas' : 'Negras'
+  const accuracyPct = Math.round(accuracy * 100)
+
+  // Format classification counts
+  const clsStr = Object.entries(classifications)
+    .filter(([, count]) => count > 0)
+    .map(([cls, count]) => `${cls}: ${count}`)
+    .join(', ')
+
+  // Format key moments
+  const momentsStr = keyMoments.length > 0
+    ? keyMoments.map(m =>
+        `Jugada ${m.moveNumber}: jugó ${m.movePlayed}, mejor era ${m.bestMove} (${m.classification}, ${m.scoreDiff} cp)`
+      ).join('. ')
+    : 'Ningún error grave.'
+
+  const deviationStr = deviationInfo
+    ? `Se desvió de la teoría en jugada ${Math.floor(deviationInfo.moveIndex / 2) + 1}: jugó ${deviationInfo.playedMove} en vez de ${deviationInfo.expectedMove}.`
+    : `Se mantuvo en la teoría hasta la jugada ${theoryDepth}.`
+
+  return `Sesión de entrenamiento completada.
+Apertura: ${opening.name} (${opening.eco})
+Color: ${side}
+Precisión: ${accuracyPct}%
+Total de jugadas evaluadas: ${totalMoves}
+Clasificaciones: ${clsStr}
+Teoría: ${deviationStr}
+Errores importantes: ${momentsStr}
+PGN: ${movesPgn}
+
+Generá un resumen breve de la sesión. Mencioná 1-2 puntos fuertes, el error más importante (si lo hubo) con explicación concreta, y una recomendación específica para mejorar en esta apertura.`
 }
