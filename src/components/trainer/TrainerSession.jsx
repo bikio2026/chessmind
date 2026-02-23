@@ -1,10 +1,10 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Chess } from 'chess.js'
 import { Board } from '../Board'
 import { TrainerMoveList } from './TrainerMoveList'
 import { CLASSIFICATIONS } from '../../hooks/useTrainerEngine'
 import { THEMES, DEFAULT_THEME } from '../../lib/pieceThemes.jsx'
-import { ArrowLeft, BookOpen, Flag, Zap, Loader2 } from 'lucide-react'
+import { ArrowLeft, BookOpen, Flag, Zap, Loader2, Lightbulb, Eye, EyeOff } from 'lucide-react'
 
 /**
  * In-game layout for the Opening Trainer.
@@ -33,6 +33,21 @@ export function TrainerSession({
   abandonSession,
 }) {
   const orientation = playerColor
+
+  // Guided mode: show all upcoming theory moves (off by default → forces recall)
+  const [guidedMode, setGuidedMode] = useState(() => {
+    return localStorage.getItem('chessmind-trainer-guided') === 'true'
+  })
+  // Hint: reveals only the next expected move (resets each move)
+  const [hintRevealed, setHintRevealed] = useState(false)
+
+  // Reset hint when a new move is played
+  useEffect(() => { setHintRevealed(false) }, [history.length])
+
+  // Persist guided mode
+  useEffect(() => {
+    localStorage.setItem('chessmind-trainer-guided', String(guidedMode))
+  }, [guidedMode])
 
   // Piece theme from localStorage (consistent with analyzer)
   const [pieceTheme] = useState(() => localStorage.getItem('chessmind-theme') || DEFAULT_THEME)
@@ -130,6 +145,10 @@ export function TrainerSession({
             theoryPreview={theoryPreview}
             deviationInfo={deviationInfo}
             opening={opening}
+            guidedMode={guidedMode}
+            onToggleGuided={() => setGuidedMode(prev => !prev)}
+            hintRevealed={hintRevealed}
+            onRevealHint={() => setHintRevealed(true)}
           />
 
           {/* Game Over banner */}
@@ -194,7 +213,10 @@ const FEEDBACK_STYLES = {
   blunder: 'bg-move-blunder/10 border-move-blunder/30',
 }
 
-function TheoryTracker({ isInTheory, theoryMoveIndex, theoryPreview, deviationInfo, opening }) {
+function TheoryTracker({
+  isInTheory, theoryMoveIndex, theoryPreview, deviationInfo, opening,
+  guidedMode, onToggleGuided, hintRevealed, onRevealHint,
+}) {
   if (!opening) return null
 
   const total = opening.mainLine.length
@@ -205,9 +227,26 @@ function TheoryTracker({ isInTheory, theoryMoveIndex, theoryPreview, deviationIn
     <div className="bg-surface-alt rounded-xl border border-surface-light/30 p-3">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider">Línea principal</h3>
-        <span className="text-[10px] text-text-muted">
-          {completed}/{total} jugadas
-        </span>
+        <div className="flex items-center gap-2">
+          {/* Guided mode toggle */}
+          {isInTheory && (
+            <button
+              onClick={onToggleGuided}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
+                guidedMode
+                  ? 'bg-move-book/15 text-move-book'
+                  : 'bg-surface-light text-text-muted hover:text-text-dim'
+              }`}
+              title={guidedMode ? 'Modo guiado: muestra todas las jugadas' : 'Sin guía: tenés que recordar'}
+            >
+              {guidedMode ? <Eye size={10} /> : <EyeOff size={10} />}
+              {guidedMode ? 'Guiado' : 'Sin guía'}
+            </button>
+          )}
+          <span className="text-[10px] text-text-muted">
+            {completed}/{total} jugadas
+          </span>
+        </div>
       </div>
 
       {/* Progress bar */}
@@ -221,12 +260,31 @@ function TheoryTracker({ isInTheory, theoryMoveIndex, theoryPreview, deviationIn
         />
       </div>
 
-      {/* Theory preview */}
+      {/* Theory hint area — 3 modes */}
       {isInTheory && theoryPreview.length > 0 && (
-        <div className="text-xs text-text-dim">
-          <span className="text-text-muted">Próximas: </span>
-          <span className="font-mono">{theoryPreview.join(' ')}</span>
-        </div>
+        guidedMode ? (
+          /* Modo guiado: muestra todas las próximas */
+          <div className="text-xs text-text-dim">
+            <span className="text-text-muted">Próximas: </span>
+            <span className="font-mono">{theoryPreview.join(' ')}</span>
+          </div>
+        ) : hintRevealed ? (
+          /* Pista revelada: solo la próxima jugada */
+          <div className="text-xs text-text-dim flex items-center gap-1.5">
+            <Lightbulb size={11} className="text-move-inaccuracy shrink-0" />
+            <span className="text-text-muted">Jugada esperada: </span>
+            <span className="font-mono text-move-book font-medium">{theoryPreview[0]}</span>
+          </div>
+        ) : (
+          /* Sin pista: botón para revelar */
+          <button
+            onClick={onRevealHint}
+            className="flex items-center gap-1.5 text-xs text-text-muted hover:text-move-inaccuracy transition-colors"
+          >
+            <Lightbulb size={12} />
+            <span>Pista</span>
+          </button>
+        )
       )}
 
       {/* Deviation info */}
