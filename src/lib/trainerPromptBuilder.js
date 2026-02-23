@@ -59,8 +59,10 @@ export function buildTrainerPrompt({
   isDeviation,
   expectedTheoryMove,
 }) {
+  if (!opening || !playedMove || !classification) return null
+
   const historyStr = formatHistory(history)
-  const mainLineStr = formatMainLine(opening.mainLine)
+  const mainLineStr = formatMainLine(opening.mainLine || [])
 
   // ── Book move: explain the theory concept ──
   if (classification === 'book') {

@@ -90,7 +90,7 @@ export function TrainerSession({
       expectedTheoryMove: deviationInfo?.expectedMove,
     })
 
-    llm.analyze(prompt)
+    if (prompt) llm.analyze(prompt)
   }, [pendingFeedback, opening, playerColor, position, history, deviationInfo])
 
   // Synchronous move wrapper — Board's onDrop needs sync return value

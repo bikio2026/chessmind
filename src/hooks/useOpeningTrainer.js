@@ -124,13 +124,18 @@ export function useOpeningTrainer({ trainerEngine }) {
     if (!trainerEngine?.isReady) return
     setIsEngineThinking(true)
 
-    const fen = gameRef.current.fen()
-    const move = await trainerEngine.getEngineMove(fen, engineStrength)
-    if (move) {
-      const result = gameRef.current.move(move)
-      if (result) sync()
+    try {
+      const fen = gameRef.current.fen()
+      const move = await trainerEngine.getEngineMove(fen, engineStrength)
+      if (move) {
+        const result = gameRef.current.move(move)
+        if (result) sync()
+      }
+    } catch (err) {
+      console.error('[Trainer] Engine move error:', err)
+    } finally {
+      setIsEngineThinking(false)
     }
-    setIsEngineThinking(false)
   }
 
   /**
