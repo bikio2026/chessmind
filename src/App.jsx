@@ -16,9 +16,19 @@ import { SemanticPanel } from './components/SemanticPanel'
 import { PgnLoader } from './components/PgnLoader'
 import { PieceThemeSelector } from './components/PieceThemeSelector'
 import { LLMSelector } from './components/LLMSelector'
-import { RotateCcw, FlipVertical2, FileText, Brain } from 'lucide-react'
+import { TrainerView } from './components/trainer/TrainerView'
+import { RotateCcw, FlipVertical2, FileText, Brain, GraduationCap, BarChart3 } from 'lucide-react'
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem('chessmind-tab') || 'analyzer'
+  })
+
+  function handleTabChange(tab) {
+    setActiveTab(tab)
+    localStorage.setItem('chessmind-tab', tab)
+  }
+
   const {
     position,
     history,
@@ -198,122 +208,158 @@ export default function App() {
     <div className="min-h-screen bg-surface p-3 md:p-4">
       {/* Header */}
       <header className="max-w-7xl mx-auto mb-3 flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-xl md:text-2xl font-bold text-accent">
-          ChessMind
-          <span className="text-xs md:text-sm font-normal text-text-dim ml-2">Análisis Semántico</span>
-        </h1>
-        <div className="flex items-center gap-2 md:gap-3">
-          <PieceThemeSelector currentTheme={pieceTheme} onChange={handleThemeChange} />
-          <LLMSelector
-            provider={llmProvider}
-            model={llmModel}
-            providerStatus={providerStatus}
-            enabled={semanticEnabled}
-            isProduction={isProduction}
-            onChange={handleLLMChange}
-            onToggle={handleToggleSemantic}
-          />
-          <button
-            onClick={() => setPgnLoaderOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-alt rounded-lg text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm"
-          >
-            <FileText size={16} />
-            <span className="hidden sm:inline">Cargar PGN</span>
-          </button>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl md:text-2xl font-bold text-accent">
+            ChessMind
+          </h1>
+          {/* Tab switcher */}
+          <div className="flex bg-surface-alt rounded-lg p-0.5 gap-0.5">
+            <button
+              onClick={() => handleTabChange('analyzer')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                activeTab === 'analyzer'
+                  ? 'bg-accent/20 text-accent'
+                  : 'text-text-dim hover:text-text hover:bg-surface-light/50'
+              }`}
+            >
+              <BarChart3 size={13} />
+              <span className="hidden sm:inline">Analizador</span>
+            </button>
+            <button
+              onClick={() => handleTabChange('trainer')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                activeTab === 'trainer'
+                  ? 'bg-accent/20 text-accent'
+                  : 'text-text-dim hover:text-text hover:bg-surface-light/50'
+              }`}
+            >
+              <GraduationCap size={13} />
+              <span className="hidden sm:inline">Entrenador</span>
+            </button>
+          </div>
         </div>
+        {/* Analyzer controls (only show in analyzer tab) */}
+        {activeTab === 'analyzer' && (
+          <div className="flex items-center gap-2 md:gap-3">
+            <PieceThemeSelector currentTheme={pieceTheme} onChange={handleThemeChange} />
+            <LLMSelector
+              provider={llmProvider}
+              model={llmModel}
+              providerStatus={providerStatus}
+              enabled={semanticEnabled}
+              isProduction={isProduction}
+              onChange={handleLLMChange}
+              onToggle={handleToggleSemantic}
+            />
+            <button
+              onClick={() => setPgnLoaderOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-alt rounded-lg text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm"
+            >
+              <FileText size={16} />
+              <span className="hidden sm:inline">Cargar PGN</span>
+            </button>
+          </div>
+        )}
       </header>
 
-      {/* Main layout */}
-      <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-4">
-        {/* Left: EvalBar + Board + Controls */}
-        <div className="flex flex-col items-center gap-3 shrink-0 self-center lg:self-start">
-          <div className="flex gap-2">
-            <EvalBar score={currentScore} isGameOver={isGameOver} turn={turn} />
-            <Board
-              position={position}
-              onMove={makeMove}
-              orientation={orientation}
-              lastMove={lastMove}
-              pieces={customPieces}
-            />
+      {/* Tab Content */}
+      {activeTab === 'analyzer' ? (
+        <>
+          {/* Main layout */}
+          <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-4">
+            {/* Left: EvalBar + Board + Controls */}
+            <div className="flex flex-col items-center gap-3 shrink-0 self-center lg:self-start">
+              <div className="flex gap-2">
+                <EvalBar score={currentScore} isGameOver={isGameOver} turn={turn} />
+                <Board
+                  position={position}
+                  onMove={makeMove}
+                  orientation={orientation}
+                  lastMove={lastMove}
+                  pieces={customPieces}
+                />
+              </div>
+
+              {/* Controls */}
+              <div className="flex items-center gap-1.5 md:gap-2">
+                <button onClick={goToStart} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Inicio (Home)">⏮</button>
+                <button onClick={goBack} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Atrás (←)">◀</button>
+                <button onClick={goForward} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Adelante (→)">▶</button>
+                <button onClick={goToEnd} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Final (End)">⏭</button>
+                <div className="w-px h-6 bg-surface-light mx-0.5" />
+                <button onClick={flipBoard} className="p-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors" title="Girar tablero (F)">
+                  <FlipVertical2 size={18} />
+                </button>
+                <button onClick={reset} className="p-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors" title="Nueva partida">
+                  <RotateCcw size={18} />
+                </button>
+              </div>
+
+              {/* Turn indicator */}
+              <div className="flex items-center gap-2 text-sm text-text-dim">
+                <span className={`w-3 h-3 rounded-full border border-surface-light ${turn === 'w' ? 'bg-eval-white' : 'bg-eval-black'}`} />
+                Turno: <span className="font-medium text-text">{turn === 'w' ? 'Blancas' : 'Negras'}</span>
+                {history.length > 0 && (
+                  <span className="text-text-muted text-xs ml-1">
+                    ({Math.ceil(history.length / 2)} jugadas)
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Right: Panels */}
+            <div className="flex-1 flex flex-col gap-3 min-w-0">
+              <EnginePanel
+                lines={lines}
+                isAnalyzing={sfAnalyzing}
+                isReady={sfReady}
+                currentFen={position}
+                isGameOver={isGameOver}
+                turn={turn}
+                engineLabel={engineLabel}
+                loadingStatus={sfLoadingStatus}
+              />
+
+              <MoveList
+                history={history}
+                currentMoveIndex={currentMoveIndex}
+                onMoveClick={goToMove}
+              />
+
+              <SemanticPanel
+                narrative={narrative}
+                isAnalyzing={llmAnalyzing}
+                error={llmError}
+                providerStatus={providerStatus}
+                llmProvider={llmProvider}
+                llmModel={llmModel}
+                semanticEnabled={semanticEnabled}
+                onRefresh={handleRefreshSemantic}
+                onStartOllama={startOllama}
+                promptVersion={promptVersion}
+                promptVersions={PROMPT_VERSIONS}
+                onPromptVersionChange={handlePromptVersionChange}
+              />
+            </div>
           </div>
 
-          {/* Controls */}
-            <div className="flex items-center gap-1.5 md:gap-2">
-              <button onClick={goToStart} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Inicio (Home)">⏮</button>
-              <button onClick={goBack} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Atrás (←)">◀</button>
-              <button onClick={goForward} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Adelante (→)">▶</button>
-              <button onClick={goToEnd} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Final (End)">⏭</button>
-              <div className="w-px h-6 bg-surface-light mx-0.5" />
-              <button onClick={flipBoard} className="p-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors" title="Girar tablero (F)">
-                <FlipVertical2 size={18} />
-              </button>
-              <button onClick={reset} className="p-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors" title="Nueva partida">
-                <RotateCcw size={18} />
-              </button>
+          {/* FEN display */}
+          <div className="max-w-7xl mx-auto mt-3">
+            <div className="font-mono text-xs text-text-muted bg-surface-alt rounded px-3 py-1.5 break-all">
+              {position}
             </div>
+          </div>
 
-            {/* Turn indicator */}
-            <div className="flex items-center gap-2 text-sm text-text-dim">
-              <span className={`w-3 h-3 rounded-full border border-surface-light ${turn === 'w' ? 'bg-eval-white' : 'bg-eval-black'}`} />
-              Turno: <span className="font-medium text-text">{turn === 'w' ? 'Blancas' : 'Negras'}</span>
-              {history.length > 0 && (
-                <span className="text-text-muted text-xs ml-1">
-                  ({Math.ceil(history.length / 2)} jugadas)
-                </span>
-              )}
-            </div>
-        </div>
-
-        {/* Right: Panels */}
-        <div className="flex-1 flex flex-col gap-3 min-w-0">
-          <EnginePanel
-            lines={lines}
-            isAnalyzing={sfAnalyzing}
-            isReady={sfReady}
-            currentFen={position}
-            isGameOver={isGameOver}
-            turn={turn}
-            engineLabel={engineLabel}
-            loadingStatus={sfLoadingStatus}
+          {/* PGN Loader Modal */}
+          <PgnLoader
+            isOpen={pgnLoaderOpen}
+            onClose={() => setPgnLoaderOpen(false)}
+            onLoad={loadPgn}
           />
-
-          <MoveList
-            history={history}
-            currentMoveIndex={currentMoveIndex}
-            onMoveClick={goToMove}
-          />
-
-          <SemanticPanel
-            narrative={narrative}
-            isAnalyzing={llmAnalyzing}
-            error={llmError}
-            providerStatus={providerStatus}
-            llmProvider={llmProvider}
-            llmModel={llmModel}
-            semanticEnabled={semanticEnabled}
-            onRefresh={handleRefreshSemantic}
-            onStartOllama={startOllama}
-            promptVersion={promptVersion}
-            promptVersions={PROMPT_VERSIONS}
-            onPromptVersionChange={handlePromptVersionChange}
-          />
-        </div>
-      </div>
-
-      {/* FEN display */}
-      <div className="max-w-7xl mx-auto mt-3">
-        <div className="font-mono text-xs text-text-muted bg-surface-alt rounded px-3 py-1.5 break-all">
-          {position}
-        </div>
-      </div>
-
-      {/* PGN Loader Modal */}
-      <PgnLoader
-        isOpen={pgnLoaderOpen}
-        onClose={() => setPgnLoaderOpen(false)}
-        onLoad={loadPgn}
-      />
+        </>
+      ) : (
+        <TrainerView />
+      )}
     </div>
   )
 }

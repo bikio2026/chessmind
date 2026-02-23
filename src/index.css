@@ -15,6 +15,13 @@
   --color-move-bad: #f87171;
   --color-move-book: #a78bfa;
   --color-highlight: rgba(233, 69, 96, 0.3);
+
+  /* Trainer move classifications */
+  --color-move-excellent: #4ade80;
+  --color-move-good-light: #86efac;
+  --color-move-inaccuracy: #fbbf24;
+  --color-move-mistake: #fb923c;
+  --color-move-blunder: #f87171;
   --font-sans: system-ui, -apple-system, sans-serif;
   --font-mono: 'SF Mono', Monaco, 'Cascadia Code', monospace;
 }
