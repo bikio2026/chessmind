@@ -2,7 +2,16 @@ import { useState, useMemo, useCallback } from 'react'
 import { Chess } from 'chess.js'
 import { Chessboard } from 'react-chessboard'
 
-export function Board({ position, onMove, orientation = 'white', lastMove, pieces }) {
+export function Board({
+  position,
+  onMove,
+  orientation = 'white',
+  lastMove,
+  pieces,
+  editMode = false,
+  onEditPlace,
+  onEditRemove,
+}) {
   const [selectedSquare, setSelectedSquare] = useState(null)
 
   // Get legal moves for a square using a temp Chess instance
@@ -29,6 +38,9 @@ export function Board({ position, onMove, orientation = 'white', lastMove, piece
   // Build square styles: last move + selection + legal targets
   const squareStyles = useMemo(() => {
     const styles = {}
+
+    // In edit mode, no highlights
+    if (editMode) return styles
 
     // Last move highlight
     if (lastMove) {
@@ -66,9 +78,15 @@ export function Board({ position, onMove, orientation = 'white', lastMove, piece
     }
 
     return styles
-  }, [lastMove, selectedSquare, position])
+  }, [lastMove, selectedSquare, position, editMode])
 
   function handleSquareClick({ piece, square }) {
+    // Edit mode: place or remove piece
+    if (editMode) {
+      if (onEditPlace) onEditPlace(square)
+      return
+    }
+
     if (!selectedSquare) {
       // No selection — select if it's own piece
       if (piece && isOwnPiece(square)) {
@@ -107,11 +125,25 @@ export function Board({ position, onMove, orientation = 'white', lastMove, piece
   }
 
   function onDrop({ sourceSquare, targetSquare, piece }) {
+    // Edit mode: free-form piece movement
+    if (editMode) {
+      if (sourceSquare && targetSquare && sourceSquare !== targetSquare) {
+        if (onEditPlace) onEditPlace(targetSquare, sourceSquare)
+      }
+      return true
+    }
+
     const isPawn = piece?.pieceType?.toLowerCase() === 'p'
     const promotion = isPawn ? 'q' : undefined
     const move = onMove(sourceSquare, targetSquare, promotion)
     setSelectedSquare(null)
     return move !== null
+  }
+
+  function handleRightClick({ square }) {
+    if (editMode && onEditRemove) {
+      onEditRemove(square)
+    }
   }
 
   return (
@@ -122,6 +154,7 @@ export function Board({ position, onMove, orientation = 'white', lastMove, piece
           position,
           onPieceDrop: onDrop,
           onSquareClick: handleSquareClick,
+          onSquareRightClick: editMode ? handleRightClick : undefined,
           boardOrientation: orientation,
           squareStyles,
           boardStyle: {
@@ -131,7 +164,7 @@ export function Board({ position, onMove, orientation = 'white', lastMove, piece
           darkSquareStyle: { backgroundColor: '#779952' },
           lightSquareStyle: { backgroundColor: '#edeed1' },
           pieces,
-          animationDurationInMs: 200,
+          animationDurationInMs: editMode ? 0 : 200,
         }}
       />
     </div>
