@@ -1,16 +1,48 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 
 /**
  * Lightweight LLM hook for the Opening Trainer.
  * Uses the same API endpoints as the analyzer but with 'trainer' system prompt.
- * Reads provider/model from localStorage (shared settings).
- * If provider is 'ollama' (local only), falls back to claude.
+ * Checks health on mount to know which providers are available.
+ * Provider/model are read from localStorage (shared with analyzer's LLMSelector).
  */
 export function useTrainerLLM() {
   const [narrative, setNarrative] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [error, setError] = useState(null)
+  const [providerStatus, setProviderStatus] = useState({
+    ollama: null,
+    claude: null,
+    groq: null,
+    ollamaModels: [],
+    claudeModels: [],
+    groqModels: [],
+  })
   const abortRef = useRef(null)
+
+  // Check health on mount to know which providers are available
+  const checkHealth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/health')
+      const data = await res.json()
+      const status = {
+        ollama: data.ollama?.available ?? false,
+        claude: data.claude?.available ?? false,
+        groq: data.groq?.available ?? false,
+        ollamaModels: data.ollama?.models ?? [],
+        claudeModels: data.claude?.models ?? [],
+        groqModels: data.groq?.models ?? [],
+      }
+      setProviderStatus(status)
+      return status
+    } catch {
+      const status = { ollama: false, claude: false, groq: false, ollamaModels: [], claudeModels: [], groqModels: [] }
+      setProviderStatus(status)
+      return status
+    }
+  }, [])
+
+  useEffect(() => { checkHealth() }, [checkHealth])
 
   const analyze = useCallback(async (prompt, { promptVersion = 'trainer' } = {}) => {
     // Read shared provider/model settings
@@ -78,6 +110,7 @@ export function useTrainerLLM() {
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
+        console.error('[TrainerLLM] Error:', err.message)
         setError(err.message || 'Error en el análisis semántico')
       }
     } finally {
@@ -92,5 +125,5 @@ export function useTrainerLLM() {
     setIsAnalyzing(false)
   }, [])
 
-  return { narrative, isAnalyzing, error, analyze, clear }
+  return { narrative, isAnalyzing, error, providerStatus, analyze, clear, checkHealth }
 }

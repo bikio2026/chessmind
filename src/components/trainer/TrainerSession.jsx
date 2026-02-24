@@ -3,11 +3,12 @@ import { Chess } from 'chess.js'
 import { Board } from '../Board'
 import { TrainerMoveList } from './TrainerMoveList'
 import { TrainerFeedbackPanel } from './TrainerFeedbackPanel'
+import { LLMSelector } from '../LLMSelector'
 import { CLASSIFICATIONS } from '../../hooks/useTrainerEngine'
 import { useTrainerLLM } from '../../hooks/useTrainerLLM'
 import { buildTrainerPrompt } from '../../lib/trainerPromptBuilder'
 import { THEMES, DEFAULT_THEME } from '../../lib/pieceThemes.jsx'
-import { ArrowLeft, BookOpen, Flag, Zap, Loader2, Lightbulb, Eye, EyeOff, RotateCcw, Brain } from 'lucide-react'
+import { ArrowLeft, BookOpen, Flag, Zap, Loader2, Lightbulb, Eye, EyeOff, RotateCcw, Brain, AlertCircle } from 'lucide-react'
 
 /**
  * In-game layout for the Opening Trainer.
@@ -67,23 +68,40 @@ export function TrainerSession({
     return localStorage.getItem('chessmind-trainer-llm') !== 'false'
   })
 
+  // Production detection (no Ollama)
+  const isProduction = typeof window !== 'undefined' && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')
+
+  // LLM provider/model state (shared localStorage keys with analyzer)
+  const [llmProvider, setLlmProvider] = useState(() => {
+    const saved = localStorage.getItem('chessmind-llm-provider') || 'claude'
+    if (isProduction && saved === 'ollama') return 'groq'
+    return saved
+  })
+  const [llmModel, setLlmModel] = useState(() => {
+    return localStorage.getItem('chessmind-llm-model') || ''
+  })
+
   // Persist LLM toggle
   useEffect(() => {
     localStorage.setItem('chessmind-trainer-llm', String(llmEnabled))
   }, [llmEnabled])
 
-  // Derive model label for display
-  const llmModelLabel = useMemo(() => {
-    const provider = localStorage.getItem('chessmind-llm-provider') || 'claude'
-    const model = localStorage.getItem('chessmind-llm-model') || ''
-    if (provider === 'ollama' || (provider === 'claude' && !model)) return 'Haiku 4.5'
-    if (provider === 'groq') return model ? model.split('-').slice(0, 2).join(' ') : 'Llama 3.3'
-    // Shorten Claude model names
-    if (model.includes('haiku')) return 'Haiku 4.5'
-    if (model.includes('sonnet')) return 'Sonnet 4'
-    if (model.includes('opus')) return 'Opus 4'
-    return model.slice(0, 15) || 'Haiku 4.5'
-  }, [])
+  function handleLLMChange(provider, model) {
+    setLlmProvider(provider)
+    setLlmModel(model)
+    localStorage.setItem('chessmind-llm-provider', provider)
+    localStorage.setItem('chessmind-llm-model', model)
+    llm.clear()
+  }
+
+  function handleToggleLLM() {
+    setLlmEnabled(prev => {
+      const next = !prev
+      localStorage.setItem('chessmind-trainer-llm', String(next))
+      if (!next) llm.clear()
+      return next
+    })
+  }
 
   // Trigger LLM analysis when pendingFeedback changes (new player move evaluated)
   useEffect(() => {
@@ -152,7 +170,7 @@ export function TrainerSession({
           <span className="text-xs font-mono text-text-muted">{opening?.eco}</span>
         </div>
 
-        {/* Status badges */}
+        {/* Status badges + LLM Selector */}
         <div className="flex items-center gap-2">
           {isInTheory ? (
             <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-move-book/15 text-move-book">
@@ -170,6 +188,16 @@ export function TrainerSession({
               {isEngineThinking ? 'Pensando...' : 'Evaluando...'}
             </span>
           )}
+          {/* LLM Model Selector (same component as analyzer) */}
+          <LLMSelector
+            provider={llmProvider}
+            model={llmModel}
+            providerStatus={llm.providerStatus}
+            enabled={llmEnabled}
+            isProduction={isProduction}
+            onChange={handleLLMChange}
+            onToggle={handleToggleLLM}
+          />
         </div>
       </div>
 
@@ -230,6 +258,7 @@ export function TrainerSession({
               info={feedbackInfo}
               llmNarrative={llmEnabled ? llm.narrative : ''}
               llmAnalyzing={llmEnabled && llm.isAnalyzing}
+              llmError={llmEnabled ? llm.error : null}
             />
           )}
 
@@ -240,25 +269,8 @@ export function TrainerSession({
             playerColor={playerColor}
           />
 
-          {/* Strength Slider */}
+          {/* Strength Slider (tooltip-based info) */}
           <StrengthSlider value={engineStrength} onChange={setEngineStrength} />
-
-          {/* LLM Toggle */}
-          <div className="bg-surface-alt rounded-xl border border-surface-light/30 p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Brain size={11} className={llmEnabled ? 'text-accent' : 'text-text-muted'} />
-                <span className="text-xs font-bold text-text-muted uppercase tracking-wider">Análisis LLM</span>
-                <span className="text-[10px] text-text-muted">({llmModelLabel})</span>
-              </div>
-              <button
-                onClick={() => { setLlmEnabled(prev => !prev); if (llmEnabled) llm.clear() }}
-                className={`relative w-8 h-4 rounded-full transition-colors ${llmEnabled ? 'bg-accent' : 'bg-surface-light'}`}
-              >
-                <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${llmEnabled ? 'left-4' : 'left-0.5'}`} />
-              </button>
-            </div>
-          </div>
 
           {/* Session Controls */}
           <div className="flex items-center gap-2">
@@ -292,7 +304,7 @@ export function TrainerSession({
   )
 }
 
-/* ─── Inline sub-components (will be extracted in Phase 3) ─── */
+/* ─── Inline sub-components ─── */
 
 const FEEDBACK_STYLES = {
   book: 'bg-move-book/10 border-move-book/30',
@@ -398,14 +410,14 @@ function TheoryTracker({
   )
 }
 
-function FeedbackCard({ feedback, info, llmNarrative, llmAnalyzing }) {
+function FeedbackCard({ feedback, info, llmNarrative, llmAnalyzing, llmError }) {
   const cls = feedback.evaluation.classification
   const isBook = cls === 'book'
   const isError = cls === 'inaccuracy' || cls === 'mistake' || cls === 'blunder'
   const cardStyle = FEEDBACK_STYLES[cls] || ''
   const [expanded, setExpanded] = useState(isError) // auto-expand for errors
 
-  const showLLM = (llmNarrative || llmAnalyzing) && (isError || isBook || cls === 'excellent' || cls === 'good')
+  const showLLM = (llmNarrative || llmAnalyzing || llmError) && (isError || isBook || cls === 'excellent' || cls === 'good')
 
   return (
     <div className={`rounded-xl border p-3 animate-fadeIn ${cardStyle}`}>
@@ -446,15 +458,25 @@ function FeedbackCard({ feedback, info, llmNarrative, llmAnalyzing }) {
             {expanded ? 'Ocultar análisis' : '¿Por qué?'}
           </button>
           {expanded && (
-            <p className="text-xs text-text-dim leading-relaxed mt-1.5">
-              {llmNarrative}
-              {llmAnalyzing && (
-                <span className="inline-block w-1.5 h-3 bg-accent/60 ml-0.5 animate-pulse rounded-sm" />
+            <div className="text-xs leading-relaxed mt-1.5">
+              {llmError && (
+                <p className="text-move-mistake flex items-center gap-1.5">
+                  <AlertCircle size={11} className="shrink-0" />
+                  {llmError}
+                </p>
               )}
-              {!llmNarrative && llmAnalyzing && (
-                <span className="italic text-text-muted">Analizando...</span>
+              {!llmError && (
+                <p className="text-text-dim">
+                  {llmNarrative}
+                  {llmAnalyzing && (
+                    <span className="inline-block w-1.5 h-3 bg-accent/60 ml-0.5 animate-pulse rounded-sm" />
+                  )}
+                  {!llmNarrative && llmAnalyzing && (
+                    <span className="italic text-text-muted">Analizando...</span>
+                  )}
+                </p>
               )}
-            </p>
+            </div>
           )}
         </div>
       )}
@@ -470,7 +492,10 @@ function StrengthSlider({ value, onChange }) {
     value <= 18 ? 'Experto' : 'Máximo'
 
   return (
-    <div className="bg-surface-alt rounded-xl border border-surface-light/30 p-3">
+    <div
+      className="bg-surface-alt rounded-xl border border-surface-light/30 p-3"
+      title={`Stockfish Skill Level (0-20). Controla la fuerza del motor después de salir de la teoría.\nProfundidad de búsqueda: ${Math.min(8 + value, 18)} plys.\n\n0-3: Principiante — comete errores frecuentes\n4-8: Intermedio — juego razonable\n9-14: Avanzado — pocos errores\n15-18: Experto — juego fuerte\n19-20: Máximo — fuerza completa`}
+    >
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
           <Zap size={11} />

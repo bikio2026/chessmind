@@ -27,6 +27,7 @@ export function useOpeningTrainer({ trainerEngine }) {
   const [isEvaluating, setIsEvaluating] = useState(false)
   const [pendingFeedback, setPendingFeedback] = useState(null)
   const [sessionSummary, setSessionSummary] = useState(null)
+  const [sessionId, setSessionId] = useState(0) // incremented on each start/restart
 
   const gameRef = useRef(new Chess())
   const openingRef = useRef(null)
@@ -75,11 +76,13 @@ export function useOpeningTrainer({ trainerEngine }) {
     setIsEngineThinking(false)
     setIsEvaluating(false)
     setPendingFeedback(null)
+    setSessionId(prev => prev + 1) // triggers useEffect for black's first move
     sync()
   }, [])
 
   /**
    * After starting, if player is black, engine plays the first theory move.
+   * sessionId ensures this re-triggers on restart (phase stays 'playing').
    */
   useEffect(() => {
     if (phase !== 'playing' || !opening) return
@@ -87,7 +90,7 @@ export function useOpeningTrainer({ trainerEngine }) {
       // Engine plays the first theory move
       playEngineTheoryMove()
     }
-  }, [phase, opening, playerColor, trainerEngine?.isReady])
+  }, [phase, opening, playerColor, trainerEngine?.isReady, sessionId])
 
   /**
    * Play the next engine theory move from the opening mainLine.
