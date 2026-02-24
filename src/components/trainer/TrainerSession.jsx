@@ -8,7 +8,7 @@ import { CLASSIFICATIONS } from '../../hooks/useTrainerEngine'
 import { useTrainerLLM } from '../../hooks/useTrainerLLM'
 import { buildTrainerPrompt } from '../../lib/trainerPromptBuilder'
 import { THEMES, DEFAULT_THEME } from '../../lib/pieceThemes.jsx'
-import { ArrowLeft, BookOpen, Flag, Zap, Loader2, Lightbulb, Eye, EyeOff, RotateCcw, Brain, AlertCircle } from 'lucide-react'
+import { ArrowLeft, BookOpen, Flag, Zap, Loader2, Lightbulb, Eye, EyeOff, RotateCcw, Brain, AlertCircle, Info } from 'lucide-react'
 
 /**
  * In-game layout for the Opening Trainer.
@@ -485,6 +485,7 @@ function FeedbackCard({ feedback, info, llmNarrative, llmAnalyzing, llmError }) 
 }
 
 function StrengthSlider({ value, onChange }) {
+  const [showTooltip, setShowTooltip] = useState(false)
   const label =
     value <= 3 ? 'Principiante' :
     value <= 8 ? 'Intermedio' :
@@ -492,14 +493,35 @@ function StrengthSlider({ value, onChange }) {
     value <= 18 ? 'Experto' : 'Máximo'
 
   return (
-    <div
-      className="bg-surface-alt rounded-xl border border-surface-light/30 p-3"
-      title={`Stockfish Skill Level (0-20). Controla la fuerza del motor después de salir de la teoría.\nProfundidad de búsqueda: ${Math.min(8 + value, 18)} plys.\n\n0-3: Principiante — comete errores frecuentes\n4-8: Intermedio — juego razonable\n9-14: Avanzado — pocos errores\n15-18: Experto — juego fuerte\n19-20: Máximo — fuerza completa`}
-    >
+    <div className="bg-surface-alt rounded-xl border border-surface-light/30 p-3">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
           <Zap size={11} />
           Nivel del motor
+          <span className="relative">
+            <button
+              onClick={() => setShowTooltip(prev => !prev)}
+              onMouseEnter={() => setShowTooltip(true)}
+              onMouseLeave={() => setShowTooltip(false)}
+              className="text-text-muted hover:text-text-dim transition-colors"
+            >
+              <Info size={11} />
+            </button>
+            {showTooltip && (
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 bg-surface border border-surface-light rounded-lg shadow-xl p-3 z-50 text-[11px] text-text-dim font-normal normal-case tracking-normal leading-relaxed">
+                <p className="font-semibold text-text mb-1.5">Stockfish Skill Level (0–20)</p>
+                <p className="mb-1.5">Controla la fuerza del motor después de salir de la teoría. Profundidad: {Math.min(8 + value, 18)} plys.</p>
+                <div className="space-y-0.5 text-[10px]">
+                  <p><span className="text-text font-medium">0–3:</span> Principiante — errores frecuentes</p>
+                  <p><span className="text-text font-medium">4–8:</span> Intermedio — juego razonable</p>
+                  <p><span className="text-text font-medium">9–14:</span> Avanzado — pocos errores</p>
+                  <p><span className="text-text font-medium">15–18:</span> Experto — juego fuerte</p>
+                  <p><span className="text-text font-medium">19–20:</span> Máximo — fuerza completa</p>
+                </div>
+                <div className="absolute left-1/2 -translate-x-1/2 top-full w-2 h-2 bg-surface border-r border-b border-surface-light rotate-45 -mt-1" />
+              </div>
+            )}
+          </span>
         </h3>
         <span className="text-xs text-text-dim">{label} ({value})</span>
       </div>
