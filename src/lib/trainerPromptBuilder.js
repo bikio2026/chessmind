@@ -119,7 +119,7 @@ Explicá por qué ${bestMove} era mejor que ${playedMove}. ¿Qué pierde o qué 
 export function buildSummaryPrompt(summary) {
   if (!summary) return null
 
-  const { opening, playerColor, accuracy, totalMoves, classifications, keyMoments, deviationInfo, theoryDepth, movesPgn } = summary
+  const { opening, playerColor, accuracy, avgCpLoss, totalMoves, classifications, keyMoments, deviationInfo, theoryDepth, movesPgn } = summary
   const side = playerColor === 'white' ? 'Blancas' : 'Negras'
   const accuracyPct = Math.round(accuracy * 100)
 
@@ -132,7 +132,7 @@ export function buildSummaryPrompt(summary) {
   // Format key moments
   const momentsStr = keyMoments.length > 0
     ? keyMoments.map(m =>
-        `Jugada ${m.moveNumber}: jugó ${m.movePlayed}, mejor era ${m.bestMove} (${m.classification}, ${m.scoreDiff} cp)`
+        `Jugada ${m.moveNumber}: jugó ${m.movePlayed}, mejor era ${m.bestMove} (${m.classification}, −${m.scoreDiff} cp)`
       ).join('. ')
     : 'Ningún error grave.'
 
@@ -143,12 +143,13 @@ export function buildSummaryPrompt(summary) {
   return `Sesión de entrenamiento completada.
 Apertura: ${opening.name} (${opening.eco})
 Color: ${side}
-Precisión: ${accuracyPct}%
+Precisión: ${accuracyPct}% (pérdida promedio: ${avgCpLoss || 0} cp por jugada)
 Total de jugadas evaluadas: ${totalMoves}
 Clasificaciones: ${clsStr}
 Teoría: ${deviationStr}
 Errores importantes: ${momentsStr}
 PGN: ${movesPgn}
 
+IMPORTANTE: La precisión se basa en centipawn loss promedio. No digas que fue perfecta si hubo imprecisiones o errores. Sé honesto y específico.
 Generá un resumen breve de la sesión. Mencioná 1-2 puntos fuertes, el error más importante (si lo hubo) con explicación concreta, y una recomendación específica para mejorar en esta apertura.`
 }

@@ -264,7 +264,7 @@ export function useOpeningTrainer({ trainerEngine }) {
     for (const [idx, ev] of playerMoves) {
       const cls = ev.classification
       classifications[cls] = (classifications[cls] || 0) + 1
-      if (cls === 'mistake' || cls === 'blunder') {
+      if (cls === 'inaccuracy' || cls === 'mistake' || cls === 'blunder') {
         const h = gameRef.current.history({ verbose: true })
         keyMoments.push({
           moveIndex: idx,
@@ -277,15 +277,23 @@ export function useOpeningTrainer({ trainerEngine }) {
       }
     }
 
-    const totalEval = playerMoves.filter(([, ev]) => ev.classification !== 'book').length
-    const goodMoves = playerMoves.filter(([, ev]) => ev.classification === 'excellent' || ev.classification === 'good').length
-    const accuracy = totalEval > 0 ? goodMoves / totalEval : 1
+    // Accuracy: weighted by centipawn loss (similar to Lichess ACPL)
+    // accuracy = 1 - (avgCpLoss / 100), clamped to [0, 1]
+    // Book moves count as 0 cp loss (perfect)
+    const allCpLosses = playerMoves.map(([, ev]) => ev.scoreDiff || 0)
+    const avgCpLoss = allCpLosses.length > 0
+      ? allCpLosses.reduce((sum, cp) => sum + cp, 0) / allCpLosses.length
+      : 0
+    const accuracy = allCpLosses.length > 0
+      ? Math.max(0, Math.min(1, 1 - avgCpLoss / 100))
+      : 0 // No moves → 0% (not 100%)
 
     const summary = {
       opening,
       playerColor,
       totalMoves: playerMoves.length,
       accuracy,
+      avgCpLoss: Math.round(avgCpLoss),
       classifications,
       keyMoments,
       deviationInfo,

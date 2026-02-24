@@ -14,6 +14,7 @@ export function useChessGame() {
     turn: 'w',
     isGameOver: false,
   })
+  const [pgnHeaders, setPgnHeaders] = useState(null)
 
   const sync = useCallback(() => {
     const g = gameRef.current
@@ -87,6 +88,10 @@ export function useChessGame() {
     game.reset()
     try {
       game.loadPgn(pgnString)
+      // Extract PGN headers (White, Black, Event, Date, Result, etc.)
+      const headers = game.header()
+      setPgnHeaders(headers && Object.keys(headers).length > 0 ? headers : null)
+
       const verboseHistory = game.history({ verbose: true })
       historyRef.current = verboseHistory
       // Start at move 0 (first move) so user can navigate forward
@@ -105,6 +110,7 @@ export function useChessGame() {
     gameRef.current.reset()
     historyRef.current = []
     moveIndexRef.current = -1
+    setPgnHeaders(null)
     sync()
   }, [sync])
 
@@ -132,6 +138,7 @@ export function useChessGame() {
     goBack,
     goToStart,
     goToEnd,
+    pgnHeaders,
     loadPgn,
     loadFen,
     reset,

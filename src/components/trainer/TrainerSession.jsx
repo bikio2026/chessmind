@@ -7,7 +7,7 @@ import { CLASSIFICATIONS } from '../../hooks/useTrainerEngine'
 import { useTrainerLLM } from '../../hooks/useTrainerLLM'
 import { buildTrainerPrompt } from '../../lib/trainerPromptBuilder'
 import { THEMES, DEFAULT_THEME } from '../../lib/pieceThemes.jsx'
-import { ArrowLeft, BookOpen, Flag, Zap, Loader2, Lightbulb, Eye, EyeOff } from 'lucide-react'
+import { ArrowLeft, BookOpen, Flag, Zap, Loader2, Lightbulb, Eye, EyeOff, RotateCcw, Brain } from 'lucide-react'
 
 /**
  * In-game layout for the Opening Trainer.
@@ -34,6 +34,7 @@ export function TrainerSession({
   makeTrainerMove,
   endSession,
   abandonSession,
+  restartSession,
 }) {
   const orientation = playerColor
 
@@ -62,10 +63,31 @@ export function TrainerSession({
   // ── LLM semantic feedback ──
   const llm = useTrainerLLM()
   const lastAnalyzedRef = useRef(null)
+  const [llmEnabled, setLlmEnabled] = useState(() => {
+    return localStorage.getItem('chessmind-trainer-llm') !== 'false'
+  })
+
+  // Persist LLM toggle
+  useEffect(() => {
+    localStorage.setItem('chessmind-trainer-llm', String(llmEnabled))
+  }, [llmEnabled])
+
+  // Derive model label for display
+  const llmModelLabel = useMemo(() => {
+    const provider = localStorage.getItem('chessmind-llm-provider') || 'claude'
+    const model = localStorage.getItem('chessmind-llm-model') || ''
+    if (provider === 'ollama' || (provider === 'claude' && !model)) return 'Haiku 4.5'
+    if (provider === 'groq') return model ? model.split('-').slice(0, 2).join(' ') : 'Llama 3.3'
+    // Shorten Claude model names
+    if (model.includes('haiku')) return 'Haiku 4.5'
+    if (model.includes('sonnet')) return 'Sonnet 4'
+    if (model.includes('opus')) return 'Opus 4'
+    return model.slice(0, 15) || 'Haiku 4.5'
+  }, [])
 
   // Trigger LLM analysis when pendingFeedback changes (new player move evaluated)
   useEffect(() => {
-    if (!pendingFeedback || !opening) return
+    if (!llmEnabled || !pendingFeedback || !opening) return
     // Don't re-analyze the same move
     if (lastAnalyzedRef.current === pendingFeedback.moveIndex) return
     lastAnalyzedRef.current = pendingFeedback.moveIndex
@@ -91,7 +113,7 @@ export function TrainerSession({
     })
 
     if (prompt) llm.analyze(prompt)
-  }, [pendingFeedback, opening, playerColor, position, history, deviationInfo])
+  }, [llmEnabled, pendingFeedback, opening, playerColor, position, history, deviationInfo])
 
   // Synchronous move wrapper — Board's onDrop needs sync return value
   const handleMove = useCallback((from, to, promotion) => {
@@ -201,17 +223,15 @@ export function TrainerSession({
             </div>
           )}
 
-          {/* Move Feedback */}
+          {/* Move Feedback + integrated LLM explanation */}
           {feedback && feedbackInfo && (
-            <FeedbackCard feedback={feedback} info={feedbackInfo} />
+            <FeedbackCard
+              feedback={feedback}
+              info={feedbackInfo}
+              llmNarrative={llmEnabled ? llm.narrative : ''}
+              llmAnalyzing={llmEnabled && llm.isAnalyzing}
+            />
           )}
-
-          {/* LLM Semantic Feedback */}
-          <TrainerFeedbackPanel
-            narrative={llm.narrative}
-            isAnalyzing={llm.isAnalyzing}
-            error={llm.error}
-          />
 
           {/* Move List */}
           <TrainerMoveList
@@ -223,21 +243,47 @@ export function TrainerSession({
           {/* Strength Slider */}
           <StrengthSlider value={engineStrength} onChange={setEngineStrength} />
 
+          {/* LLM Toggle */}
+          <div className="bg-surface-alt rounded-xl border border-surface-light/30 p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Brain size={11} className={llmEnabled ? 'text-accent' : 'text-text-muted'} />
+                <span className="text-xs font-bold text-text-muted uppercase tracking-wider">Análisis LLM</span>
+                <span className="text-[10px] text-text-muted">({llmModelLabel})</span>
+              </div>
+              <button
+                onClick={() => { setLlmEnabled(prev => !prev); if (llmEnabled) llm.clear() }}
+                className={`relative w-8 h-4 rounded-full transition-colors ${llmEnabled ? 'bg-accent' : 'bg-surface-light'}`}
+              >
+                <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${llmEnabled ? 'left-4' : 'left-0.5'}`} />
+              </button>
+            </div>
+          </div>
+
           {/* Session Controls */}
           <div className="flex items-center gap-2">
             <button
               onClick={abandonSession}
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-surface-alt rounded-lg text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm"
+              className="flex items-center justify-center gap-2 px-3 py-2 bg-surface-alt rounded-lg text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm"
             >
               <ArrowLeft size={14} />
-              Abandonar
+              Volver
             </button>
+            {restartSession && (
+              <button
+                onClick={restartSession}
+                className="flex items-center justify-center gap-2 px-3 py-2 bg-surface-alt rounded-lg text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm"
+              >
+                <RotateCcw size={14} />
+                Reiniciar
+              </button>
+            )}
             <button
               onClick={endSession}
               className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-accent/15 rounded-lg text-accent hover:bg-accent/25 transition-colors text-sm font-medium"
             >
               <Flag size={14} />
-              Finalizar sesión
+              Finalizar
             </button>
           </div>
         </div>
@@ -352,10 +398,14 @@ function TheoryTracker({
   )
 }
 
-function FeedbackCard({ feedback, info }) {
+function FeedbackCard({ feedback, info, llmNarrative, llmAnalyzing }) {
   const cls = feedback.evaluation.classification
   const isBook = cls === 'book'
+  const isError = cls === 'inaccuracy' || cls === 'mistake' || cls === 'blunder'
   const cardStyle = FEEDBACK_STYLES[cls] || ''
+  const [expanded, setExpanded] = useState(isError) // auto-expand for errors
+
+  const showLLM = (llmNarrative || llmAnalyzing) && (isError || isBook || cls === 'excellent' || cls === 'good')
 
   return (
     <div className={`rounded-xl border p-3 animate-fadeIn ${cardStyle}`}>
@@ -383,6 +433,30 @@ function FeedbackCard({ feedback, info }) {
 
       {isBook && (
         <p className="text-xs text-text-dim">Jugada de libro — seguís la línea principal</p>
+      )}
+
+      {/* LLM explanation — expandable */}
+      {showLLM && (
+        <div className="mt-2 border-t border-current/10 pt-2">
+          <button
+            onClick={() => setExpanded(prev => !prev)}
+            className="flex items-center gap-1.5 text-[11px] text-text-muted hover:text-text-dim transition-colors"
+          >
+            <Brain size={11} />
+            {expanded ? 'Ocultar análisis' : '¿Por qué?'}
+          </button>
+          {expanded && (
+            <p className="text-xs text-text-dim leading-relaxed mt-1.5">
+              {llmNarrative}
+              {llmAnalyzing && (
+                <span className="inline-block w-1.5 h-3 bg-accent/60 ml-0.5 animate-pulse rounded-sm" />
+              )}
+              {!llmNarrative && llmAnalyzing && (
+                <span className="italic text-text-muted">Analizando...</span>
+              )}
+            </p>
+          )}
+        </div>
       )}
     </div>
   )

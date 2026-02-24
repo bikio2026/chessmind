@@ -47,6 +47,13 @@ export function TrainerView() {
     }
   }, [trainer.phase, trainer.sessionSummary])
 
+  // Restart current opening (must be before conditional returns — Rules of Hooks)
+  const restartSession = useCallback(() => {
+    if (trainer.opening) {
+      handleSelectOpening(trainer.opening)
+    }
+  }, [trainer.opening, handleSelectOpening])
+
   // Phase: select
   if (trainer.phase === 'select') {
     return (
@@ -69,7 +76,7 @@ export function TrainerView() {
 
   // Phase: playing
   if (trainer.phase === 'playing') {
-    return <TrainerSession {...trainer} />
+    return <TrainerSession {...trainer} restartSession={restartSession} />
   }
 
   // Phase: summary

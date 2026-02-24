@@ -41,6 +41,7 @@ export default function App() {
     goToMove,
     goToStart,
     goToEnd,
+    pgnHeaders,
     loadPgn,
     reset,
   } = useChessGame()
@@ -269,6 +270,22 @@ export default function App() {
           <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-4">
             {/* Left: EvalBar + Board + Controls */}
             <div className="flex flex-col items-center gap-3 shrink-0 self-center lg:self-start">
+              {/* Player label (top — opponent side) */}
+              {pgnHeaders?.White && (
+                <div className="flex items-center gap-2 text-xs text-text-dim self-start ml-7">
+                  <span className={`w-2.5 h-2.5 rounded-full border ${orientation === 'white' ? 'bg-eval-black border-text-muted/50' : 'bg-eval-white border-text-muted/30'}`} />
+                  <span className="font-medium text-text">
+                    {orientation === 'white' ? pgnHeaders.Black : pgnHeaders.White}
+                  </span>
+                  {pgnHeaders.BlackElo && orientation === 'white' && (
+                    <span className="text-text-muted">({pgnHeaders.BlackElo})</span>
+                  )}
+                  {pgnHeaders.WhiteElo && orientation === 'black' && (
+                    <span className="text-text-muted">({pgnHeaders.WhiteElo})</span>
+                  )}
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <EvalBar score={currentScore} isGameOver={isGameOver} turn={turn} />
                 <Board
@@ -279,6 +296,22 @@ export default function App() {
                   pieces={customPieces}
                 />
               </div>
+
+              {/* Player label (bottom — our side) */}
+              {pgnHeaders?.White && (
+                <div className="flex items-center gap-2 text-xs text-text-dim self-start ml-7">
+                  <span className={`w-2.5 h-2.5 rounded-full border ${orientation === 'white' ? 'bg-eval-white border-text-muted/30' : 'bg-eval-black border-text-muted/50'}`} />
+                  <span className="font-medium text-text">
+                    {orientation === 'white' ? pgnHeaders.White : pgnHeaders.Black}
+                  </span>
+                  {pgnHeaders.WhiteElo && orientation === 'white' && (
+                    <span className="text-text-muted">({pgnHeaders.WhiteElo})</span>
+                  )}
+                  {pgnHeaders.BlackElo && orientation === 'black' && (
+                    <span className="text-text-muted">({pgnHeaders.BlackElo})</span>
+                  )}
+                </div>
+              )}
 
               {/* Controls */}
               <div className="flex items-center gap-1.5 md:gap-2">

@@ -178,10 +178,10 @@ export function useTrainerEngine() {
  * Classify a move based on centipawn loss.
  */
 function classifyMove(cpLoss) {
-  if (cpLoss <= 10) return 'excellent'
-  if (cpLoss <= 30) return 'good'
-  if (cpLoss <= 80) return 'inaccuracy'
-  if (cpLoss <= 200) return 'mistake'
+  if (cpLoss <= 5) return 'excellent'
+  if (cpLoss <= 20) return 'good'
+  if (cpLoss <= 50) return 'inaccuracy'
+  if (cpLoss <= 100) return 'mistake'
   return 'blunder'
 }
 
