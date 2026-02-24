@@ -132,7 +132,9 @@ export default function App() {
   }
 
   // Don't auto-analyze the starting position (no moves played/loaded)
-  const hasMoves = currentMoveIndex >= 0 || history.length > 0
+  // Exception: custom positions from the editor should always be analyzed
+  const [isCustomPosition, setIsCustomPosition] = useState(false)
+  const hasMoves = currentMoveIndex >= 0 || history.length > 0 || isCustomPosition
 
   // Check provider availability on mount
   useEffect(() => {
@@ -362,7 +364,10 @@ export default function App() {
                   onCastlingChange={editor.toggleCastlingRight}
                   onClear={editor.clearBoard}
                   onReset={editor.resetBoard}
-                  onAnalyze={() => editor.validateAndApply(loadFen)}
+                  onAnalyze={() => {
+                    const applied = editor.validateAndApply(loadFen)
+                    if (applied) setIsCustomPosition(true)
+                  }}
                   onCancel={editor.exitEditMode}
                   validationError={editor.validationError}
                 />
@@ -377,7 +382,7 @@ export default function App() {
                     <button onClick={flipBoard} className="p-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors" title="Girar tablero (F)">
                       <FlipVertical2 size={18} />
                     </button>
-                    <button onClick={reset} className="p-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors" title="Nueva partida">
+                    <button onClick={() => { reset(); setIsCustomPosition(false) }} className="p-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors" title="Nueva partida">
                       <RotateCcw size={18} />
                     </button>
                     <button onClick={editor.enterEditMode} className="p-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors" title="Editar posición">
@@ -478,7 +483,7 @@ export default function App() {
             <PgnLoader
               isOpen={pgnLoaderOpen}
               onClose={() => setPgnLoaderOpen(false)}
-              onLoad={loadPgn}
+              onLoad={(pgn) => { setIsCustomPosition(false); return loadPgn(pgn) }}
             />
           )}
         </>
