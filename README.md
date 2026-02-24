@@ -1,16 +1,78 @@
-# React + Vite
+# ChessMind
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Analizador semántico de ajedrez con entrenador de aperturas interactivo.
 
-Currently, two official plugins are available:
+Combiná la potencia de Stockfish con explicaciones en lenguaje natural generadas por LLM para entender **por qué** una jugada es buena o mala.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+**[Demo en vivo](https://chessmind-one.vercel.app)**
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Analizador de posiciones** — Tablero interactivo con evaluación Stockfish en tiempo real (MultiPV 3, WDL%)
+- **Análisis semántico** — Narrativas generadas por LLM que explican ideas, planes y consecuencias
+- **Entrenador de aperturas** — Practicá 13 aperturas con feedback por jugada y clasificación automática
+- **Multi-provider LLM** — Claude (Haiku/Sonnet), Groq (Llama 3.3 70B), u Ollama (local)
+- **Carga de PGN** — 16 partidas clásicas precargadas + carga manual
+- **Evaluación por jugada** — Clasificación tipo Lichess (excelente/buena/imprecisión/error/blunder)
+- **Resumen de sesión** — Precisión ACPL, momentos clave, narrativa LLM motivadora
+- **Responsive** — Funciona en desktop, tablet y mobile
 
-## Expanding the ESLint configuration
+## Stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+![React](https://img.shields.io/badge/React-19-blue) ![Vite](https://img.shields.io/badge/Vite-7-purple) ![Tailwind](https://img.shields.io/badge/Tailwind-v4-cyan) ![Stockfish](https://img.shields.io/badge/Stockfish-18_WASM-green)
+
+- **Frontend**: React 19 + Vite 7 + Tailwind CSS v4
+- **Tablero**: react-chessboard 5 + chess.js 1.4
+- **Motor**: Stockfish 18 WASM Lite (Web Worker)
+- **LLM**: Claude API + Groq API + Ollama (local)
+- **Deploy**: Vercel (Serverless Functions)
+
+## Quick Start
+
+```bash
+# 1. Clonar
+git clone https://github.com/bikio2026/chessmind.git
+cd chessmind
+
+# 2. Instalar dependencias
+npm install
+
+# 3. Configurar API keys
+cp .env.example .env
+# Editar .env con tus keys (ver abajo)
+
+# 4. Iniciar (frontend + API proxy)
+npm run dev
+```
+
+Abre [http://localhost:3055](http://localhost:3055).
+
+## Variables de entorno
+
+| Variable | Requerida | Descripcion |
+|----------|-----------|-------------|
+| `ANTHROPIC_API_KEY` | Para Claude | [Obtener key](https://console.anthropic.com/settings/keys) |
+| `GROQ_API_KEY` | Para Llama/Groq | [Obtener key gratis](https://console.groq.com/keys) |
+
+Sin API keys, Stockfish y el tablero funcionan normalmente. Solo el analisis semantico LLM requiere al menos una key.
+
+## Comandos
+
+```bash
+npm run dev      # Frontend (Vite :3055) + API proxy (:3056)
+npm run client   # Solo frontend
+npm run server   # Solo API proxy
+npm run build    # Build de produccion
+```
+
+## Documentacion
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — Arquitectura y flujos de datos
+- [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — Mapa de componentes React
+- [`docs/HOOKS.md`](docs/HOOKS.md) — Referencia de custom hooks
+- [`docs/LLM.md`](docs/LLM.md) — Providers, prompts y streaming SSE
+- [`docs/OPENINGS.md`](docs/OPENINGS.md) — Catalogo de aperturas del entrenador
+
+## License
+
+MIT

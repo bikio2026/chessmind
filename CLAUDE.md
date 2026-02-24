@@ -1,5 +1,8 @@
 # ChessMind — Analizador Semántico de Ajedrez
 
+## Versión actual
+- **post-v1.0**: Opening Trainer completo + prompt versioning sobre v1.0-stable
+
 ## Stack
 - Vite 7 + React 19 + JavaScript + Tailwind v4 (CSS-based)
 - chess.js 1.4 + Stockfish WASM 18 Lite + react-chessboard 5
@@ -23,39 +26,97 @@ npm run server   # Solo API proxy
 npm run build    # Build producción
 ```
 
+## Módulos
+
+La app tiene 2 tabs principales: **Analizador** y **Entrenador de Aperturas**.
+
+### Analizador
+Tablero interactivo + carga PGN + evaluación Stockfish + análisis semántico LLM.
+
+Hooks: `useChessGame` → `useStockfish` → `usePositionAnalysis` → `useSemanticAnalysis`
+
+### Opening Trainer
+Entrenador de aperturas con 13 aperturas catalogadas, Stockfish como oponente con nivel configurable (0-20), evaluación por jugada, y feedback LLM.
+
+Hooks: `useTrainerEngine` + `useOpeningTrainer` + `useTrainerLLM` + `useTrainerData`
+
+Flujo: `select` → `playing` → `summary`
+
 ## Arquitectura
 ```
 src/
-  hooks/useChessGame.js         — Estado del juego (chess.js)
-  hooks/useStockfish.js         — Motor WASM via Web Worker
-  hooks/usePositionAnalysis.js  — Heurísticas posicionales
-  hooks/useSemanticAnalysis.js  — Streaming LLM (multi-provider)
-  lib/heuristics.js             — Funciones puras de análisis
-  lib/promptBuilder.js          — Constructor de prompts (phase-aware)
-  lib/promptVersions.js         — Definiciones de versiones de prompt
-  lib/stockfishParser.js        — Parser UCI
-  components/                   — UI components
-server/index.js                 — API proxy local (Ollama + Claude + Groq)
+  hooks/
+    useChessGame.js           — Estado del juego (chess.js)
+    useStockfish.js           — Motor WASM via Web Worker (MultiPV)
+    usePositionAnalysis.js    — Heurísticas posicionales
+    useSemanticAnalysis.js    — Streaming LLM (multi-provider)
+    useOpeningTrainer.js      — Estado del trainer (fases, teoría, evaluación)
+    useTrainerEngine.js       — Stockfish dedicado para trainer (Skill Level)
+    useTrainerLLM.js          — LLM dedicado para trainer (feedback por jugada)
+    useTrainerData.js         — Persistencia de sesiones y stats (localStorage)
+  lib/
+    heuristics.js             — Funciones puras de análisis
+    promptBuilder.js          — Constructor de prompts (phase-aware)
+    promptVersions.js         — Definiciones de versiones de prompt
+    trainerPromptBuilder.js   — Constructor de prompts del trainer
+    stockfishParser.js        — Parser UCI
+  data/
+    openings.js               — Catálogo de 13 aperturas (mainLine, variantes, ideas)
+    classicGames.js           — 16 partidas clásicas PGN
+  components/
+    Board.jsx                 — Tablero compartido (react-chessboard)
+    LLMSelector.jsx           — Selector de provider/modelo (compartido)
+    trainer/
+      TrainerView.jsx         — Container principal (instancia hooks)
+      OpeningSelector.jsx     — Selector de apertura por categoría
+      TrainerSession.jsx      — Sesión de juego (tablero + feedback + controles)
+      TrainerFeedbackPanel.jsx — Panel lateral de feedback semántico
+server/index.js               — API proxy local (Ollama + Claude + Groq)
 api/
-  _shared.js                    — Config compartida, system prompts, CORS
-  analyze-claude.js             — Endpoint Claude (Vercel)
-  analyze-groq.js               — Endpoint Groq (Vercel)
-  health.js                     — Health check proveedores
+  _shared.js                  — Config compartida, system prompts, CORS
+  analyze-claude.js           — Endpoint Claude (Vercel)
+  analyze-groq.js             — Endpoint Groq (Vercel)
+  health.js                   — Health check proveedores
 ```
 
+## Trainer: Clasificaciones de jugadas
+
+| cpLoss | Clasificación | Símbolo |
+|--------|--------------|---------|
+| 0 | book (jugada de teoría) | 📖 |
+| ≤5 | excellent | ✓✓ |
+| ≤20 | good | ✓ |
+| ≤50 | inaccuracy | ?! |
+| ≤100 | mistake | ? |
+| >100 | blunder | ?? |
+
+Accuracy ACPL: `max(0, min(1, 1 - avgCpLoss / 100))`
+
 ## Providers LLM
-- **Ollama**: Local, requiere `ollama serve` + `ollama pull llama3.2`. Gratis pero lento.
+- **Ollama**: Local, requiere `ollama serve` + `ollama pull llama3.2`. Gratis pero lento. Solo en dev.
 - **Claude**: Requiere `ANTHROPIC_API_KEY` en env. Modelos: Haiku 4.5 (rápido), Sonnet 4 (mejor calidad).
 - **Groq**: Requiere `GROQ_API_KEY` en env. Modelo: Llama 3.3 70B. Rápido pero menor calidad ajedrecística.
 
-## Prompt Versioning
+## Prompt Versioning (Analizador)
 - **v1 "Base"**: Prompt directo sin ejemplos
 - **v2 "Few-shot"**: Con 3 ejemplos modelo (apertura, medio juego, final)
 - Selector en UI (SemanticPanel), persiste en localStorage
 - Cache key incluye versión: `${provider}:${promptVersion}:${fen}`
 
-## Versión actual
-- **post-v1.0**: Prompt versioning (v1 Base + v2 Few-shot) sobre v1.0-stable
+## System Prompts (Trainer)
+- **trainer**: Feedback por jugada (~80 palabras, español rioplatense, enfoque didáctico)
+- **trainerSummary**: Resumen narrativo al finalizar sesión (~150 palabras)
+
+## LocalStorage Keys
+| Key | Uso |
+|-----|-----|
+| `chessmind-llm-provider` | Provider LLM (compartido analyzer/trainer) |
+| `chessmind-llm-model` | Modelo LLM (compartido analyzer/trainer) |
+| `chessmind-prompt-version` | Versión de prompt del analizador |
+| `chessmind-semantic-cache` | Cache de análisis semánticos |
+| `chessmind-trainer-strength` | Skill Level de Stockfish en trainer (0-20) |
+| `chessmind-trainer-sessions` | Historial de sesiones (últimas 50) |
+| `chessmind-trainer-stats` | Stats por apertura (accuracy, profundidad, etc.) |
 
 ## Git Tags
 - `v1.0-stable`: Última versión estable antes de prompt versioning (commit 1b0cd4f, 2026-02-22)
@@ -67,10 +128,25 @@ api/
 - System prompt: español rioplatense, ~80 palabras, 3-4 oraciones, sin markdown
 - max_tokens: 300 para Groq/Ollama, 1024 para Claude
 - 16 partidas clásicas precargadas en el menú PGN
+- 13 aperturas catalogadas en 5 categorías (abiertas, semiabiertas, cerradas, indias, flancos)
+- Documentación detallada en `docs/` (ARCHITECTURE, COMPONENTS, HOOKS, LLM, OPENINGS)
 
 ---
 
 ## Changelog
+
+### Opening Trainer + Docs (2026-02-23)
+- Opening Trainer completo: 4 fases de desarrollo (selector → engine → LLM feedback → persistencia)
+- 13 aperturas en 5 categorías con líneas principales, variantes, e ideas clave
+- Stockfish como oponente con Skill Level configurable (0-20)
+- Evaluación por jugada con clasificación (book/excellent/good/inaccuracy/mistake/blunder)
+- Feedback semántico LLM por jugada con selector de provider/modelo
+- Resumen narrativo LLM al finalizar sesión con stats de accuracy
+- Persistencia de sesiones y stats por apertura en localStorage
+- Fix: restart-with-black bug (sessionId counter)
+- Fix: re-trigger LLM al cambiar modelo (triggerAnalysis + setTimeout)
+- Fix: tooltip custom para engine strength (reemplaza title nativo)
+- Documentación completa: README, ARCHITECTURE, COMPONENTS, HOOKS, LLM, OPENINGS
 
 ### post-v1.0 — Prompt versioning (2026-02-22)
 - Sistema de versionado de prompts: v1 "Base" (directo) y v2 "Few-shot" (con 3 ejemplos modelo)
