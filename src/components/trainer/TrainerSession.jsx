@@ -86,33 +86,9 @@ export function TrainerSession({
     localStorage.setItem('chessmind-trainer-llm', String(llmEnabled))
   }, [llmEnabled])
 
-  function handleLLMChange(provider, model) {
-    setLlmProvider(provider)
-    setLlmModel(model)
-    localStorage.setItem('chessmind-llm-provider', provider)
-    localStorage.setItem('chessmind-llm-model', model)
-    lastAnalyzedRef.current = null // allow re-analysis with new model
-    llm.clear()
-  }
-
-  function handleToggleLLM() {
-    setLlmEnabled(prev => {
-      const next = !prev
-      localStorage.setItem('chessmind-trainer-llm', String(next))
-      if (!next) llm.clear()
-      else lastAnalyzedRef.current = null // re-analyze on re-enable
-      return next
-    })
-  }
-
-  // Trigger LLM analysis when pendingFeedback changes or model changes
-  useEffect(() => {
-    if (!llmEnabled || !pendingFeedback || !opening) return
-    // Don't re-analyze the same move with the same model
-    const analysisKey = `${pendingFeedback.moveIndex}:${llmProvider}:${llmModel}`
-    if (lastAnalyzedRef.current === analysisKey) return
-    lastAnalyzedRef.current = analysisKey
-
+  // Build prompt and fire LLM analysis for the current pending feedback
+  const triggerAnalysis = useCallback(() => {
+    if (!pendingFeedback || !opening) return
     const cls = pendingFeedback.evaluation?.classification
     if (!cls) return
 
@@ -127,14 +103,46 @@ export function TrainerSession({
       bestMove: pendingFeedback.bestMove || pendingFeedback.movePlayed,
       classification: cls,
       cpLoss: pendingFeedback.evaluation.scoreDiff || 0,
-      fen: position, // current position (after the move)
+      fen: position,
       history,
       isDeviation: !!deviationInfo && deviationInfo.moveIndex === pendingFeedback.moveIndex,
       expectedTheoryMove: deviationInfo?.expectedMove,
     })
 
     if (prompt) llm.analyze(prompt)
-  }, [llmEnabled, pendingFeedback, opening, playerColor, position, history, deviationInfo, llmProvider, llmModel])
+  }, [pendingFeedback, opening, playerColor, position, history, deviationInfo])
+
+  function handleLLMChange(provider, model) {
+    setLlmProvider(provider)
+    setLlmModel(model)
+    localStorage.setItem('chessmind-llm-provider', provider)
+    localStorage.setItem('chessmind-llm-model', model)
+    llm.clear()
+    // Directly re-analyze — llm.analyze reads provider/model from localStorage
+    if (llmEnabled && pendingFeedback) {
+      setTimeout(triggerAnalysis, 60)
+    }
+    lastAnalyzedRef.current = null
+  }
+
+  function handleToggleLLM() {
+    setLlmEnabled(prev => {
+      const next = !prev
+      localStorage.setItem('chessmind-trainer-llm', String(next))
+      if (!next) llm.clear()
+      else lastAnalyzedRef.current = null // re-analyze on re-enable
+      return next
+    })
+  }
+
+  // Trigger LLM analysis when pendingFeedback changes or LLM is re-enabled
+  useEffect(() => {
+    if (!llmEnabled || !pendingFeedback || !opening) return
+    const analysisKey = `${pendingFeedback.moveIndex}:${llmProvider}:${llmModel}`
+    if (lastAnalyzedRef.current === analysisKey) return
+    lastAnalyzedRef.current = analysisKey
+    triggerAnalysis()
+  }, [llmEnabled, pendingFeedback, opening, llmProvider, llmModel, triggerAnalysis])
 
   // Synchronous move wrapper — Board's onDrop needs sync return value
   const handleMove = useCallback((from, to, promotion) => {
