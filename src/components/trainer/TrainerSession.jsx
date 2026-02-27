@@ -26,6 +26,7 @@ export function TrainerSession({
   theoryMoveIndex,
   deviationInfo,
   getTheoryPreview,
+  getSemanticHint,
   moveEvaluations,
   isEvaluating,
   pendingFeedback,
@@ -43,11 +44,11 @@ export function TrainerSession({
   const [guidedMode, setGuidedMode] = useState(() => {
     return localStorage.getItem('chessmind-trainer-guided') === 'true'
   })
-  // Hint: reveals only the next expected move (resets each move)
-  const [hintRevealed, setHintRevealed] = useState(false)
+  // Hint level: 0 = none, 1 = semantic (conceptual), 2 = move revealed
+  const [hintLevel, setHintLevel] = useState(0)
 
   // Reset hint when a new move is played
-  useEffect(() => { setHintRevealed(false) }, [history.length])
+  useEffect(() => { setHintLevel(0) }, [history.length])
 
   // Persist guided mode
   useEffect(() => {
@@ -245,8 +246,9 @@ export function TrainerSession({
             opening={opening}
             guidedMode={guidedMode}
             onToggleGuided={() => setGuidedMode(prev => !prev)}
-            hintRevealed={hintRevealed}
-            onRevealHint={() => setHintRevealed(true)}
+            hintLevel={hintLevel}
+            onRequestHint={() => setHintLevel(prev => Math.min(prev + 1, 2))}
+            semanticHint={getSemanticHint()}
           />
 
           {/* Game Over banner */}
@@ -328,7 +330,7 @@ const FEEDBACK_STYLES = {
 
 function TheoryTracker({
   isInTheory, theoryMoveIndex, theoryPreview, deviationInfo, opening,
-  guidedMode, onToggleGuided, hintRevealed, onRevealHint,
+  guidedMode, onToggleGuided, hintLevel, onRequestHint, semanticHint,
 }) {
   if (!opening) return null
 
@@ -373,7 +375,7 @@ function TheoryTracker({
         />
       </div>
 
-      {/* Theory hint area — 3 modes */}
+      {/* Theory hint area — progressive levels */}
       {isInTheory && theoryPreview.length > 0 && (
         guidedMode ? (
           /* Modo guiado: muestra todas las próximas */
@@ -381,22 +383,47 @@ function TheoryTracker({
             <span className="text-text-muted">Próximas: </span>
             <span className="font-mono">{theoryPreview.join(' ')}</span>
           </div>
-        ) : hintRevealed ? (
-          /* Pista revelada: solo la próxima jugada */
-          <div className="text-xs text-text-dim flex items-center gap-1.5">
-            <Lightbulb size={11} className="text-move-inaccuracy shrink-0" />
-            <span className="text-text-muted">Jugada esperada: </span>
-            <span className="font-mono text-move-book font-medium">{theoryPreview[0]}</span>
-          </div>
-        ) : (
-          /* Sin pista: botón para revelar */
+        ) : hintLevel === 0 ? (
+          /* Sin pista: botón para pedir pista conceptual */
           <button
-            onClick={onRevealHint}
+            onClick={onRequestHint}
             className="flex items-center gap-1.5 text-xs text-text-muted hover:text-move-inaccuracy transition-colors"
           >
             <Lightbulb size={12} />
             <span>Pista</span>
           </button>
+        ) : hintLevel === 1 ? (
+          /* Nivel 1: pista semántica (conceptual) */
+          <div className="animate-fadeIn">
+            <div className="text-xs text-text-dim flex items-start gap-1.5">
+              <Lightbulb size={11} className="text-move-inaccuracy shrink-0 mt-0.5" />
+              <span className="italic leading-relaxed">
+                {semanticHint || 'Pensá en los principios generales de esta apertura'}
+              </span>
+            </div>
+            <button
+              onClick={onRequestHint}
+              className="flex items-center gap-1.5 text-[10px] text-text-muted hover:text-move-inaccuracy transition-colors mt-1.5 ml-4"
+            >
+              <Eye size={10} />
+              <span>Mostrar jugada</span>
+            </button>
+          </div>
+        ) : (
+          /* Nivel 2: jugada revelada */
+          <div className="animate-fadeIn">
+            {semanticHint && (
+              <div className="text-xs text-text-dim flex items-start gap-1.5 mb-1.5">
+                <Lightbulb size={11} className="text-move-inaccuracy shrink-0 mt-0.5" />
+                <span className="italic leading-relaxed">{semanticHint}</span>
+              </div>
+            )}
+            <div className="text-xs text-text-dim flex items-center gap-1.5 ml-4">
+              <Eye size={11} className="text-move-book shrink-0" />
+              <span className="text-text-muted">Jugada esperada: </span>
+              <span className="font-mono text-move-book font-medium">{theoryPreview[0]}</span>
+            </div>
+          </div>
         )
       )}
 

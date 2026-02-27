@@ -135,6 +135,12 @@ Accuracy ACPL: `max(0, min(1, 1 - avgCpLoss / 100))`
 
 ## Changelog
 
+### Pistas semánticas en Trainer (2026-02-27)
+- Sistema de pistas progresivas de 2 niveles: primero pista conceptual, después jugada concreta
+- `moveHints` por jugada en las 13 aperturas: explican la idea estratégica sin revelar la jugada
+- `getSemanticHint()` en useOpeningTrainer para obtener la pista de la posición actual
+- UI: click 1 = pista semántica (ej: "Apuntá con el alfil a la casilla más débil del enroque enemigo"), click 2 = jugada esperada
+
 ### Opening Trainer + Docs (2026-02-23)
 - Opening Trainer completo: 4 fases de desarrollo (selector → engine → LLM feedback → persistencia)
 - 13 aperturas en 5 categorías con líneas principales, variantes, e ideas clave
