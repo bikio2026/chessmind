@@ -336,6 +336,19 @@ export function useOpeningTrainer({ trainerEngine }) {
     return op.mainLine.slice(idx, idx + 6) // next 6 moves
   }, [isInTheory])
 
+  /**
+   * Get the semantic hint for the current theory move.
+   * Returns a conceptual explanation of what the move achieves,
+   * without revealing the specific move.
+   */
+  const getSemanticHint = useCallback(() => {
+    const op = openingRef.current
+    if (!op || !isInTheory || !op.moveHints) return null
+    const idx = theoryIndexRef.current
+    if (idx >= op.moveHints.length) return null
+    return op.moveHints[idx] || null
+  }, [isInTheory])
+
   return {
     // Session
     phase,
@@ -354,6 +367,7 @@ export function useOpeningTrainer({ trainerEngine }) {
     isInTheory,
     deviationInfo,
     getTheoryPreview,
+    getSemanticHint,
 
     // Evaluations
     moveEvaluations,
