@@ -4,6 +4,8 @@ import { useStockfish } from './hooks/useStockfish'
 import { usePositionAnalysis } from './hooks/usePositionAnalysis'
 import { useSemanticAnalysis } from './hooks/useSemanticAnalysis'
 import { useBoardEditor } from './hooks/useBoardEditor'
+import { useTrainerEngine } from './hooks/useTrainerEngine'
+import { useTrainingMode } from './hooks/useTrainingMode'
 import { buildAnalysisPrompt } from './lib/promptBuilder'
 import { PROMPT_VERSIONS, DEFAULT_VERSION } from './lib/promptVersions'
 import { pvToSan } from './lib/stockfishParser'
@@ -14,13 +16,14 @@ import { MoveList } from './components/MoveList'
 import { EvalBar } from './components/EvalBar'
 import { EnginePanel } from './components/EnginePanel'
 import { SemanticPanel } from './components/SemanticPanel'
+import { TrainingPanel } from './components/TrainingPanel'
 import { PgnLoader } from './components/PgnLoader'
 import { PieceThemeSelector } from './components/PieceThemeSelector'
 import { LLMSelector } from './components/LLMSelector'
 import { PiecePalette } from './components/PiecePalette'
 import { EditorControls } from './components/EditorControls'
 import { TrainerView } from './components/trainer/TrainerView'
-import { RotateCcw, FlipVertical2, FileText, PenLine, GraduationCap, BarChart3 } from 'lucide-react'
+import { RotateCcw, FlipVertical2, FileText, PenLine, GraduationCap, BarChart3, Target } from 'lucide-react'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => {
@@ -54,12 +57,26 @@ export default function App() {
     reset,
   } = useChessGame()
 
-  const { isReady: sfReady, isAnalyzing: sfAnalyzing, lines, analyze: sfAnalyze, engineLabel, loadingStatus: sfLoadingStatus } = useStockfish()
+  const { isReady: sfReady, isAnalyzing: sfAnalyzing, lines, bestMove, analyze: sfAnalyze, engineLabel, loadingStatus: sfLoadingStatus } = useStockfish()
   const heuristics = usePositionAnalysis(position)
   const {
     narrative, isAnalyzing: llmAnalyzing, error: llmError,
     providerStatus, analyze: llmAnalyze, checkHealth, clearNarrative, startOllama,
   } = useSemanticAnalysis()
+
+  // Training mode: dedicated engine for move evaluation + training state
+  const trainerEngine = useTrainerEngine()
+  const training = useTrainingMode({
+    bestMove,
+    position,
+    turn,
+    heuristics,
+    history,
+    currentMoveIndex,
+    isGameOver,
+    evaluateMove: trainerEngine.evaluateMove,
+    engineReady: trainerEngine.isReady,
+  })
 
   const [orientation, setOrientation] = useState('white')
   const [pgnLoaderOpen, setPgnLoaderOpen] = useState(false)
@@ -206,15 +223,48 @@ export default function App() {
 
       switch (e.key) {
         case 'ArrowLeft': e.preventDefault(); goBack(); break
-        case 'ArrowRight': e.preventDefault(); goForward(); break
+        case 'ArrowRight':
+          e.preventDefault()
+          if (!training.isTrainingMode) goForward()
+          break
         case 'Home': e.preventDefault(); goToStart(); break
-        case 'End': e.preventDefault(); goToEnd(); break
+        case 'End':
+          e.preventDefault()
+          if (!training.isTrainingMode) goToEnd()
+          break
         case 'f': flipBoard(); break
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [goBack, goForward, goToStart, goToEnd, flipBoard, editor.isEditMode, editor.exitEditMode])
+  }, [goBack, goForward, goToStart, goToEnd, flipBoard, editor.isEditMode, editor.exitEditMode, training.isTrainingMode])
+
+  // Board move handler: intercepts for training mode
+  const hasFutureMoves = history.length > 0 && currentMoveIndex < history.length - 1
+  const handleBoardMove = useCallback((from, to, promotion) => {
+    if (training.isTrainingMode) {
+      if (training.moveAttempt) return null // Already have a pending attempt
+      // Evaluate the attempt
+      training.attemptMove(from, to, promotion)
+      // If there's a loaded PGN with future moves, DON'T play (piece snaps back)
+      // If free position (no future moves), play normally
+      if (hasFutureMoves) return null
+    }
+    return makeMove(from, to, promotion)
+  }, [training.isTrainingMode, training.moveAttempt, training.attemptMove, makeMove, hasFutureMoves])
+
+  // Training mode: advance after viewing feedback
+  const handleTrainingAdvance = useCallback(() => {
+    const attempt = training.moveAttempt
+    training.clearAttempt()
+    // If there's a loaded game with more moves, advance to the next position
+    if (hasFutureMoves) {
+      goToMove(currentMoveIndex + 1)
+    } else if (attempt) {
+      // Free position: play the attempted move
+      makeMove(attempt.from, attempt.to, attempt.promotion)
+    }
+  }, [training.moveAttempt, training.clearAttempt, hasFutureMoves, currentMoveIndex, goToMove, makeMove])
 
   function handleRefreshSemantic() {
     if (!isProviderAvailable) {
@@ -255,7 +305,7 @@ export default function App() {
               }`}
             >
               <GraduationCap size={13} />
-              <span className="hidden sm:inline">Entrenador</span>
+              <span className="hidden sm:inline">Aperturas</span>
             </button>
           </div>
         </div>
@@ -324,12 +374,12 @@ export default function App() {
               )}
 
               <div className="flex gap-2">
-                {!editor.isEditMode && (
+                {!editor.isEditMode && !training.isTrainingMode && (
                   <EvalBar score={currentScore} isGameOver={isGameOver} turn={turn} />
                 )}
                 <Board
                   position={editor.isEditMode ? editor.editorFen : position}
-                  onMove={editor.isEditMode ? null : makeMove}
+                  onMove={editor.isEditMode ? null : handleBoardMove}
                   orientation={orientation}
                   lastMove={editor.isEditMode ? null : lastMove}
                   pieces={customPieces}
@@ -376,8 +426,20 @@ export default function App() {
                   <div className="flex items-center gap-1.5 md:gap-2">
                     <button onClick={goToStart} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Inicio (Home)">⏮</button>
                     <button onClick={goBack} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Atrás (←)">◀</button>
-                    <button onClick={goForward} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Adelante (→)">▶</button>
-                    <button onClick={goToEnd} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Final (End)">⏭</button>
+                    <button
+                      onClick={training.isTrainingMode ? undefined : goForward}
+                      className={`px-2.5 py-1.5 bg-surface-alt rounded transition-colors text-sm ${
+                        training.isTrainingMode ? 'text-text-muted/30 cursor-not-allowed' : 'text-text-dim hover:text-text hover:bg-surface-light'
+                      }`}
+                      title={training.isTrainingMode ? 'Deshabilitado en modo entrenamiento' : 'Adelante (→)'}
+                    >▶</button>
+                    <button
+                      onClick={training.isTrainingMode ? undefined : goToEnd}
+                      className={`px-2.5 py-1.5 bg-surface-alt rounded transition-colors text-sm ${
+                        training.isTrainingMode ? 'text-text-muted/30 cursor-not-allowed' : 'text-text-dim hover:text-text hover:bg-surface-light'
+                      }`}
+                      title={training.isTrainingMode ? 'Deshabilitado en modo entrenamiento' : 'Final (End)'}
+                    >⏭</button>
                     <div className="w-px h-6 bg-surface-light mx-0.5" />
                     <button onClick={flipBoard} className="p-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors" title="Girar tablero (F)">
                       <FlipVertical2 size={18} />
@@ -387,6 +449,17 @@ export default function App() {
                     </button>
                     <button onClick={editor.enterEditMode} className="p-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors" title="Editar posición">
                       <PenLine size={18} />
+                    </button>
+                    <button
+                      onClick={training.toggleTrainingMode}
+                      className={`p-1.5 rounded transition-colors ${
+                        training.isTrainingMode
+                          ? 'bg-accent/20 text-accent'
+                          : 'bg-surface-alt text-text-dim hover:text-text hover:bg-surface-light'
+                      }`}
+                      title={training.isTrainingMode ? 'Desactivar modo entrenamiento' : 'Modo entrenamiento'}
+                    >
+                      <Target size={18} />
                     </button>
                   </div>
 
@@ -421,6 +494,20 @@ export default function App() {
                     <p><strong>FEN:</strong> editá el campo de texto debajo del tablero</p>
                   </div>
                 </div>
+              ) : training.isTrainingMode ? (
+                /* Training mode panels */
+                <>
+                  <TrainingPanel
+                    training={{ ...training, clearAttempt: handleTrainingAdvance }}
+                  />
+
+                  <MoveList
+                    history={history}
+                    currentMoveIndex={currentMoveIndex}
+                    onMoveClick={goToMove}
+                    hideFutureMoves={training.hideFutureMoves}
+                  />
+                </>
               ) : (
                 /* Normal analyzer panels */
                 <>

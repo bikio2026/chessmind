@@ -29,6 +29,10 @@ Explicá la CONSECUENCIA CONCRETA de la jugada: qué se pierde, qué se deja de 
   trainerSummary: `Entrenador de ajedrez. Español rioplatense. MÁXIMO 4-5 oraciones, ~100 palabras. Un solo párrafo. Sin listas, sin markdown, sin títulos.
 
 Generá un resumen motivador pero honesto de la sesión. Mencioná puntos fuertes, el error más importante con una explicación breve, y una recomendación concreta para la próxima sesión. Hablale directamente al alumno usando "vos". No repitas los datos crudos del prompt.`,
+
+  hint: `Instructor de ajedrez dando pistas. Español rioplatense. ESTRICTO: 1-2 oraciones, 20-40 palabras. Sin listas, sin markdown.
+
+Describí la IDEA ESTRATÉGICA o TÁCTICA detrás de la mejor jugada. PROHIBIDO nombrar la jugada, la casilla de destino, o la pieza exacta que se mueve. Usá conceptos generales: "mejorá tu peor pieza", "hay una debilidad táctica en el flanco de rey", "buscá una ruptura en el centro". Sé concreto en el concepto pero vago en la ejecución.`,
 }
 
 function getSystemPrompt(version) {
