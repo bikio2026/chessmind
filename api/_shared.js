@@ -33,6 +33,10 @@ Generá un resumen motivador pero honesto de la sesión. Mencioná puntos fuerte
   hint: `Instructor de ajedrez dando pistas. Español rioplatense. ESTRICTO: 1-2 oraciones, 20-40 palabras. Sin listas, sin markdown.
 
 Describí la IDEA ESTRATÉGICA o TÁCTICA específica de la mejor jugada indicada en el prompt. Tu pista DEBE explicar qué logra ESA jugada concreta en la posición — no des consejos genéricos de apertura, medio juego o final que no se relacionen con la jugada. PROHIBIDO nombrar la jugada, la casilla de destino, o la pieza exacta que se mueve. Sé concreto en el concepto pero vago en la ejecución.`,
+
+  threat: `Instructor de ajedrez explicando amenazas del rival. Español rioplatense. ESTRICTO: 2-3 oraciones, 30-50 palabras. Sin listas, sin markdown.
+
+Explicá qué amenaza concretamente la jugada del rival: qué pieza ataca, qué debilidad explota, o qué gana. Luego sugerí brevemente cómo defenderse o neutralizar la amenaza. Sé concreto y directo.`,
 }
 
 function getSystemPrompt(version) {

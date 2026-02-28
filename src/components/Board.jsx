@@ -8,6 +8,7 @@ export function Board({
   orientation = 'white',
   lastMove,
   pieces,
+  arrows = [],
   editMode = false,
   onEditPlace,
   onEditRemove,
@@ -164,6 +165,8 @@ export function Board({
           darkSquareStyle: { backgroundColor: '#779952' },
           lightSquareStyle: { backgroundColor: '#edeed1' },
           pieces,
+          arrows,
+          clearArrowsOnClick: false,
           animationDurationInMs: editMode ? 0 : 200,
         }}
       />

@@ -73,3 +73,27 @@ ${movesStr ? `Partida: ${movesStr}` : ''}
 
 Explicá por qué ${bestMove} era mejor que ${playedMove}. ¿Qué pierde o qué deja de ganar el jugador con ${playedMove}?`
 }
+
+/**
+ * Build a prompt for threat analysis explanation.
+ * Used when the user activates "Mostrar amenazas" (null-move analysis).
+ *
+ * @param {Object} params
+ * @param {string} params.fen - Current position FEN
+ * @param {string} params.turn - 'w' or 'b' (side to move in the ORIGINAL position)
+ * @param {string} params.threatMoveSan - Opponent's best move (SAN) from null-move analysis
+ * @param {string} params.opponentColor - "Blancas" or "Negras"
+ * @param {Array}  params.fullHistory - Move history
+ */
+export function buildThreatPrompt({ fen, turn, threatMoveSan, opponentColor, fullHistory }) {
+  const moveNumber = fullHistory ? Math.floor(fullHistory.length / 2) + 1 : 1
+  const movesStr = fullHistory ? formatMoveHistory(fullHistory) : ''
+
+  return `FEN: ${fen}
+Jugada ${moveNumber}. Turno: ${turn === 'w' ? 'Blancas' : 'Negras'}
+${movesStr ? `Partida: ${movesStr}` : ''}
+
+Si ${opponentColor} pudieran jugar ahora, su mejor jugada sería: ${threatMoveSan}
+
+Explicá qué amenaza concretamente esa jugada, qué daño causaría, y cómo debería reaccionar el jugador.`
+}
