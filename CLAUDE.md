@@ -1,7 +1,7 @@
 # ChessMind — Analizador Semántico de Ajedrez
 
 ## Versión actual
-- **post-v1.0**: Opening Trainer completo + prompt versioning sobre v1.0-stable
+- **post-v1.0**: Biblioteca PGN ~148 partidas + Opening Trainer + prompt versioning sobre v1.0-stable
 
 ## Stack
 - Vite 7 + React 19 + JavaScript + Tailwind v4 (CSS-based)
@@ -54,6 +54,7 @@ src/
     useTrainerEngine.js       — Stockfish dedicado para trainer (Skill Level)
     useTrainerLLM.js          — LLM dedicado para trainer (feedback por jugada)
     useTrainerData.js         — Persistencia de sesiones y stats (localStorage)
+    useGameLibrary.js         — Hook de biblioteca PGN (filtros, Lichess search)
   lib/
     heuristics.js             — Funciones puras de análisis
     promptBuilder.js          — Constructor de prompts (phase-aware)
@@ -63,9 +64,12 @@ src/
   data/
     openings.js               — Catálogo de 13 aperturas (mainLine, variantes, ideas)
     classicGames.js           — 16 partidas clásicas PGN
+    sampleGames.js            — ~148 partidas curadas con metadatos ricos
+    _batch1.js … _batch4.js   — Lotes de partidas (románticas→contemporáneas+instructivas)
   components/
     Board.jsx                 — Tablero compartido (react-chessboard)
     LLMSelector.jsx           — Selector de provider/modelo (compartido)
+    GameLibrary.jsx           — Modal biblioteca: 3 tabs (Colección/Lichess/Manual)
     trainer/
       TrainerView.jsx         — Container principal (instancia hooks)
       OpeningSelector.jsx     — Selector de apertura por categoría
@@ -76,6 +80,7 @@ api/
   _shared.js                  — Config compartida, system prompts, CORS
   analyze-claude.js           — Endpoint Claude (Vercel)
   analyze-groq.js             — Endpoint Groq (Vercel)
+  lichess.js                  — Proxy Lichess API (Vercel)
   health.js                   — Health check proveedores
 ```
 
@@ -127,13 +132,24 @@ Accuracy ACPL: `max(0, min(1, 1 - avgCpLoss / 100))`
 - Análisis semántico usa debounce de 2s y cache por FEN+provider+version
 - System prompt: español rioplatense, ~80 palabras, 3-4 oraciones, sin markdown
 - max_tokens: 300 para Groq/Ollama, 1024 para Claude
-- 16 partidas clásicas precargadas en el menú PGN
+- ~148 partidas curadas en Biblioteca (7 eras + instructivas + finales) con búsqueda, filtros, y Lichess API
 - 13 aperturas catalogadas en 5 categorías (abiertas, semiabiertas, cerradas, indias, flancos)
 - Documentación detallada en `docs/` (ARCHITECTURE, COMPONENTS, HOOKS, LLM, OPENINGS)
 
 ---
 
 ## Changelog
+
+### Biblioteca PGN (2026-02-28)
+- Biblioteca de ~148 partidas curadas: 7 eras (romántica→contemporánea) + instructivas por apertura + estudios de finales
+- Modal con 3 tabs: Colección (búsqueda + filtros), Buscar en Lichess, PGN Manual
+- Filtros combinables: era, resultado, grupo ECO (A-E), rango Elo, rango año
+- Búsqueda full-text por jugador, apertura, evento, tags
+- Proxy serverless Lichess API (`api/lichess.js`) para búsqueda de partidas por usuario (evita CORS)
+- Mirror local en `server/index.js` para desarrollo
+- Datos organizados en 4 batch files (`_batch1.js` … `_batch4.js`) + colección base en `sampleGames.js`
+- Hook `useGameLibrary` con filtrado local via useMemo + búsqueda Lichess con AbortController
+- Reemplaza PgnLoader como punto de entrada — botón "Biblioteca" en header
 
 ### Pistas semánticas en Trainer (2026-02-27)
 - Sistema de pistas progresivas de 2 niveles: primero pista conceptual, después jugada concreta
