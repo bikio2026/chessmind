@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
+import { EyeOff } from 'lucide-react'
 
-export function MoveList({ history, currentMoveIndex, onMoveClick }) {
+export function MoveList({ history, currentMoveIndex, onMoveClick, hideFutureMoves = false }) {
   const currentRef = useRef(null)
 
   // Auto-scroll to current move
@@ -10,13 +11,18 @@ export function MoveList({ history, currentMoveIndex, onMoveClick }) {
     }
   }, [currentMoveIndex])
 
+  // When hiding future moves, only show up to currentMoveIndex
+  const visibleHistory = hideFutureMoves
+    ? history.slice(0, currentMoveIndex + 1)
+    : history
+
   // Build move pairs
   const movePairs = []
-  for (let i = 0; i < history.length; i += 2) {
+  for (let i = 0; i < visibleHistory.length; i += 2) {
     movePairs.push({
       number: Math.floor(i / 2) + 1,
-      white: { san: history[i].san, index: i },
-      black: history[i + 1] ? { san: history[i + 1].san, index: i + 1 } : null,
+      white: { san: visibleHistory[i].san, index: i },
+      black: visibleHistory[i + 1] ? { san: visibleHistory[i + 1].san, index: i + 1 } : null,
     })
   }
 
@@ -28,6 +34,8 @@ export function MoveList({ history, currentMoveIndex, onMoveClick }) {
       </div>
     )
   }
+
+  const hasHiddenMoves = hideFutureMoves && currentMoveIndex < history.length - 1
 
   return (
     <div className="bg-surface-alt rounded-lg p-3 max-h-64 overflow-y-auto">
@@ -59,6 +67,12 @@ export function MoveList({ history, currentMoveIndex, onMoveClick }) {
           </div>
         ))}
       </div>
+      {hasHiddenMoves && (
+        <div className="text-[10px] text-text-muted italic mt-2 flex items-center gap-1">
+          <EyeOff size={10} />
+          Jugadas ocultas (modo entrenamiento)
+        </div>
+      )}
     </div>
   )
 }

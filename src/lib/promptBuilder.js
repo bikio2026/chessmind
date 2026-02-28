@@ -52,7 +52,7 @@ export function detectPhase(moveNumber, heuristics) {
 /**
  * Format full move history as PGN string.
  */
-function formatMoveHistory(fullHistory) {
+export function formatMoveHistory(fullHistory) {
   if (!fullHistory || fullHistory.length === 0) return ''
   const moves = []
   for (let i = 0; i < fullHistory.length; i++) {
@@ -82,7 +82,7 @@ function formatStockfishLines(lines) {
 /**
  * Build data block with ONLY the heuristics relevant to the current phase.
  */
-function buildHeuristicsBlock(heuristics, lines, phase) {
+export function buildHeuristicsBlock(heuristics, lines, phase) {
   const sections = []
 
   // Stockfish lines — always relevant, most important data
