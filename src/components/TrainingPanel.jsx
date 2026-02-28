@@ -1,5 +1,5 @@
 import { CLASSIFICATIONS } from '../hooks/useTrainerEngine'
-import { Lightbulb, Eye, EyeOff, Target, ChevronRight, Cpu, BookOpen } from 'lucide-react'
+import { Lightbulb, Eye, EyeOff, Target, ChevronRight, Cpu, BookOpen, Crosshair } from 'lucide-react'
 
 const FEEDBACK_STYLES = {
   excellent: 'bg-move-excellent/5 border-move-excellent/20',
@@ -11,13 +11,14 @@ const FEEDBACK_STYLES = {
 
 /**
  * TrainingPanel — Right-panel UI for Analyzer training mode.
- * Shows progressive hints, move attempt feedback, and reference mode controls.
+ * Shows progressive hints, move attempt feedback, threat visualization, and reference mode controls.
  */
 export function TrainingPanel({ training }) {
   const {
     referenceMode, toggleReferenceMode, hasGameMove, referenceMoveSan,
-    hideFutureMoves, toggleHideFutureMoves,
+    hideFutureMoves, toggleHideFutureMoves, hasFutureMoves,
     hintLevel, hintText, isLoadingHint, requestHint, bestMoveSan,
+    showThreats, threatMoveSan, threatText, isLoadingThreats, toggleThreats,
     moveAttempt, feedbackText, isLoadingFeedback, clearAttempt,
   } = training
 
@@ -32,11 +33,11 @@ export function TrainingPanel({ training }) {
           <h3 className="text-sm font-bold text-accent">Modo Entrenamiento</h3>
         </div>
         <p className="text-xs text-text-dim">
-          Encontrá la mejor jugada. Podés pedir pistas antes de intentar.
+          Encontrá la mejor jugada. Podés pedir pistas o ver amenazas.
         </p>
 
         {/* Controls row */}
-        <div className="flex items-center gap-2 mt-2">
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
           {/* Reference mode toggle */}
           {hasGameMove && (
             <button
@@ -55,21 +56,46 @@ export function TrainingPanel({ training }) {
             </button>
           )}
 
-          {/* Hide future moves toggle */}
+          {/* Threats toggle */}
           <button
-            onClick={toggleHideFutureMoves}
+            onClick={toggleThreats}
             className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
-              hideFutureMoves
-                ? 'bg-surface-light text-text-dim'
-                : 'bg-surface-light text-text-muted'
+              showThreats
+                ? 'bg-move-blunder/15 text-move-blunder'
+                : 'bg-surface-light text-text-dim hover:text-text-muted'
             }`}
-            title={hideFutureMoves ? 'Jugadas futuras ocultas' : 'Jugadas futuras visibles'}
+            title={showThreats ? 'Ocultar amenazas' : 'Mostrar amenazas del rival'}
           >
-            {hideFutureMoves ? <EyeOff size={10} /> : <Eye size={10} />}
-            {hideFutureMoves ? 'Ocultas' : 'Visibles'}
+            <Crosshair size={10} />
+            Amenazas
           </button>
+
+          {/* Hide future moves toggle — only show when there are future moves */}
+          {hasFutureMoves && (
+            <button
+              onClick={toggleHideFutureMoves}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
+                hideFutureMoves
+                  ? 'bg-surface-light text-text-dim'
+                  : 'bg-surface-light text-text-muted'
+              }`}
+              title={hideFutureMoves ? 'Jugadas futuras ocultas' : 'Jugadas futuras visibles'}
+            >
+              {hideFutureMoves ? <EyeOff size={10} /> : <Eye size={10} />}
+              {hideFutureMoves ? 'Ocultas' : 'Visibles'}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Threat section */}
+      {showThreats && (
+        <ThreatSection
+          threatMoveSan={threatMoveSan}
+          threatText={threatText}
+          isLoading={isLoadingThreats}
+        />
+      )}
 
       {/* Hint section */}
       {!moveAttempt && (
@@ -94,10 +120,39 @@ export function TrainingPanel({ training }) {
       )}
 
       {/* Idle state */}
-      {!moveAttempt && hintLevel === 0 && (
+      {!moveAttempt && hintLevel === 0 && !showThreats && (
         <div className="text-xs text-text-muted italic text-center py-2">
           Mové una pieza para intentar, o pedí una pista
         </div>
+      )}
+    </div>
+  )
+}
+
+function ThreatSection({ threatMoveSan, threatText, isLoading }) {
+  return (
+    <div className="bg-move-blunder/5 rounded-xl border border-move-blunder/20 p-3 animate-fadeIn">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <Crosshair size={12} className="text-move-blunder" />
+        <span className="text-xs font-bold text-move-blunder">Amenaza del rival</span>
+      </div>
+
+      {threatMoveSan && (
+        <div className="text-xs text-text-dim mb-1.5">
+          Jugada: <span className="font-mono font-medium text-move-blunder">{threatMoveSan}</span>
+        </div>
+      )}
+
+      {(threatText || isLoading) && (
+        <p className="text-xs text-text-dim leading-relaxed">
+          {threatText}
+          {isLoading && (
+            <span className="inline-block w-1.5 h-3 bg-move-blunder/60 ml-0.5 animate-pulse rounded-sm" />
+          )}
+          {!threatText && isLoading && (
+            <span className="italic text-text-muted">Analizando amenazas...</span>
+          )}
+        </p>
       )}
     </div>
   )
@@ -146,7 +201,7 @@ function HintSection({ hintLevel, hintText, isLoading, referenceMoveSan, canHint
     )
   }
 
-  // hintLevel === 2: revealed
+  // hintLevel === 2: revealed (arrow is shown on board via trainingArrows)
   return (
     <div className="bg-surface-alt rounded-xl border border-surface-light/30 p-3 animate-fadeIn">
       {hintText && (
@@ -159,6 +214,7 @@ function HintSection({ hintLevel, hintText, isLoading, referenceMoveSan, canHint
         <Eye size={11} className="text-move-book shrink-0" />
         <span className="text-text-muted">Mejor jugada: </span>
         <span className="font-mono text-move-book font-medium">{referenceMoveSan}</span>
+        <span className="text-text-muted/60 text-[10px]">(flecha verde en tablero)</span>
       </div>
     </div>
   )

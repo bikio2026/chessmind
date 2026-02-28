@@ -75,6 +75,7 @@ export default function App() {
     currentMoveIndex,
     isGameOver,
     evaluateMove: trainerEngine.evaluateMove,
+    evaluatePosition: trainerEngine.evaluatePosition,
     engineReady: trainerEngine.isReady,
   })
 
@@ -383,6 +384,7 @@ export default function App() {
                   orientation={orientation}
                   lastMove={editor.isEditMode ? null : lastMove}
                   pieces={customPieces}
+                  arrows={training.isTrainingMode ? training.trainingArrows : []}
                   editMode={editor.isEditMode}
                   onEditPlace={editor.placePiece}
                   onEditRemove={editor.removePiece}
