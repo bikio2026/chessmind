@@ -35,6 +35,21 @@ export function detectPhase(moveNumber, heuristics) {
   const queensGone = !(mat.white.q) && !(mat.black.q)
   const isEndgame = totalNonPawn <= 26 || (queensGone && totalNonPawn <= 30)
 
+  // Custom positions (no history): detect phase from material + development
+  if (moveNumber <= 1 && mat) {
+    if (isEndgame) return 'endgame'
+    const dev = heuristics?.development
+    if (dev) {
+      const totalDev = dev.white.developed + dev.black.developed
+      const totalPossible = dev.white.total + dev.black.total
+      if (totalPossible > 0 && totalDev >= totalPossible * 0.6) return 'middlegame'
+      return 'opening'
+    }
+    // No development info: estimate from material alone
+    if (totalNonPawn > 30) return 'middlegame'
+    return 'opening'
+  }
+
   if (isEndgame && moveNumber > 25) return 'endgame'
   if (moveNumber <= 10) return 'opening'
   if (moveNumber <= 15 && !isEndgame) {
@@ -52,12 +67,17 @@ export function detectPhase(moveNumber, heuristics) {
 /**
  * Format full move history as PGN string.
  */
-export function formatMoveHistory(fullHistory) {
+export function formatMoveHistory(fullHistory, startHalfMove = 0) {
   if (!fullHistory || fullHistory.length === 0) return ''
   const moves = []
   for (let i = 0; i < fullHistory.length; i++) {
-    if (i % 2 === 0) moves.push(`${Math.floor(i / 2) + 1}. ${fullHistory[i].san}`)
-    else moves.push(fullHistory[i].san)
+    const halfMove = startHalfMove + i
+    if (halfMove % 2 === 0) moves.push(`${Math.floor(halfMove / 2) + 1}. ${fullHistory[i].san}`)
+    else {
+      // If this is the first move and it's black's turn, add move number with "..."
+      if (i === 0) moves.push(`${Math.floor(halfMove / 2) + 1}... ${fullHistory[i].san}`)
+      else moves.push(fullHistory[i].san)
+    }
   }
   return moves.join(' ')
 }
@@ -162,12 +182,23 @@ export function buildAnalysisPrompt({ fen, turn, lastMove, lines, heuristics, fu
   const moveNumber = fullHistory ? Math.floor(fullHistory.length / 2) + 1 : 1
   const phase = detectPhase(moveNumber, heuristics)
 
-  const movesStr = fullHistory ? formatMoveHistory(fullHistory) : ''
+  // Truncate history by phase: opening = full, middlegame = last 6, endgame = last 4
+  let movesStr = ''
+  if (fullHistory && fullHistory.length > 0) {
+    if (phase === 'opening') {
+      movesStr = formatMoveHistory(fullHistory)
+    } else {
+      const limit = phase === 'middlegame' ? 6 : 4
+      const recentMoves = fullHistory.slice(-limit)
+      const startHalfMove = fullHistory.length - recentMoves.length
+      movesStr = formatMoveHistory(recentMoves, startHalfMove)
+    }
+  }
   const dataBlock = buildHeuristicsBlock(heuristics, lines, phase)
 
   const header = `FEN: ${fen}
 Turno: ${turnName} (jugada ${moveNumber}) — Fase: ${phase === 'opening' ? 'APERTURA' : phase === 'middlegame' ? 'MEDIO JUEGO' : 'FINAL'}
-${lastMove ? `Última: ${lastMove.san}` : 'Posición inicial'}${movesStr ? `\nPartida: ${movesStr}` : ''}`
+${lastMove ? `Última: ${lastMove.san}` : 'Posición inicial'}${movesStr ? `\n${phase === 'opening' ? 'Partida' : 'Últimas jugadas'}: ${movesStr}` : ''}`
 
   let instruction = ''
 
@@ -178,7 +209,7 @@ ${lastMove ? `Última: ${lastMove.san}` : 'Posición inicial'}${movesStr ? `\nPa
       instruction = `Identificá la apertura/variante y si hubo alguna desviación de la teoría. Explicá los planes típicos de esta estructura: dónde van las piezas, qué rupturas de peones buscar, qué lado del tablero es el campo de batalla principal.`
     }
   } else if (phase === 'middlegame') {
-    instruction = `Analizá los desequilibrios clave de esta posición y el plan concreto que debería seguir cada bando. Enfocate en lo que hace interesante o crítica esta posición — no describas lo que ya se ve en los datos.`
+    instruction = `Analizá los desequilibrios clave de esta posición y el plan concreto que debería seguir cada bando. Enfocate en lo que hace interesante o crítica esta posición — no describas lo que ya se ve en los datos. No menciones la apertura ni su nombre.`
   } else {
     instruction = `Clasificá este final y explicá los factores que deciden el resultado. ¿Es ganable, tablas técnicas, o depende de la precisión? ¿Cuál es el plan correcto? Enfocate en principios de finales, no en conceptos de apertura o medio juego.`
   }
