@@ -389,6 +389,66 @@ const server = http.createServer(async (req, res) => {
     return
   }
 
+  // Lichess proxy — avoids CORS from browser
+  if (req.url === '/api/lichess' && req.method === 'POST') {
+    const body = await readBody(req)
+    try {
+      const { action, params } = JSON.parse(body)
+
+      if (action === 'playerGames') {
+        const { username, max = 20 } = params || {}
+        if (!username) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Username requerido' }))
+          return
+        }
+
+        const safeUser = encodeURIComponent(username.trim())
+        const url = `https://lichess.org/api/games/user/${safeUser}?max=${max}&perfType=classical,rapid&rated=true&opening=true&pgnInJson=true`
+
+        const lichessRes = await fetch(url, {
+          headers: { 'Accept': 'application/x-ndjson' },
+        })
+
+        if (!lichessRes.ok) {
+          const text = await lichessRes.text()
+          res.writeHead(lichessRes.status, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: text || `Lichess error ${lichessRes.status}` }))
+          return
+        }
+
+        const text = await lichessRes.text()
+        const games = text.trim().split('\n').filter(Boolean).map(line => {
+          try {
+            const g = JSON.parse(line)
+            return {
+              white: g.players?.white?.user?.name || 'Anon',
+              black: g.players?.black?.user?.name || 'Anon',
+              whiteElo: g.players?.white?.rating,
+              blackElo: g.players?.black?.rating,
+              result: g.winner === 'white' ? '1-0' : g.winner === 'black' ? '0-1' : '1/2-1/2',
+              opening: g.opening?.name || '',
+              eco: g.opening?.eco || '',
+              speed: g.speed || '',
+              date: g.createdAt ? new Date(g.createdAt).toISOString().slice(0, 10) : '',
+              pgn: g.pgn || '',
+            }
+          } catch { return null }
+        }).filter(Boolean)
+
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ games }))
+      } else {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: `Acción desconocida: ${action}` }))
+      }
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: err.message || 'Error interno' }))
+    }
+    return
+  }
+
   // Start Ollama
   if (req.url === '/api/start-ollama' && req.method === 'POST') {
     try {

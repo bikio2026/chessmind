@@ -18,12 +18,13 @@ import { EnginePanel } from './components/EnginePanel'
 import { SemanticPanel } from './components/SemanticPanel'
 import { TrainingPanel } from './components/TrainingPanel'
 import { PgnLoader } from './components/PgnLoader'
+import { GameLibrary } from './components/GameLibrary'
 import { PieceThemeSelector } from './components/PieceThemeSelector'
 import { LLMSelector } from './components/LLMSelector'
 import { PiecePalette } from './components/PiecePalette'
 import { EditorControls } from './components/EditorControls'
 import { TrainerView } from './components/trainer/TrainerView'
-import { RotateCcw, FlipVertical2, FileText, PenLine, GraduationCap, BarChart3, Target } from 'lucide-react'
+import { RotateCcw, FlipVertical2, BookOpen, PenLine, GraduationCap, BarChart3, Target } from 'lucide-react'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => {
@@ -80,7 +81,7 @@ export default function App() {
   })
 
   const [orientation, setOrientation] = useState('white')
-  const [pgnLoaderOpen, setPgnLoaderOpen] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const [pieceTheme, setPieceTheme] = useState(() => {
     return localStorage.getItem('chessmind-theme') || DEFAULT_THEME
   })
@@ -324,11 +325,11 @@ export default function App() {
               onToggle={handleToggleSemantic}
             />
             <button
-              onClick={() => setPgnLoaderOpen(true)}
+              onClick={() => setLibraryOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-alt rounded-lg text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm"
             >
-              <FileText size={16} />
-              <span className="hidden sm:inline">Cargar PGN</span>
+              <BookOpen size={16} />
+              <span className="hidden sm:inline">Biblioteca</span>
             </button>
           </div>
         )}
@@ -567,11 +568,11 @@ export default function App() {
             )}
           </div>
 
-          {/* PGN Loader Modal */}
+          {/* Game Library Modal */}
           {!editor.isEditMode && (
-            <PgnLoader
-              isOpen={pgnLoaderOpen}
-              onClose={() => setPgnLoaderOpen(false)}
+            <GameLibrary
+              isOpen={libraryOpen}
+              onClose={() => setLibraryOpen(false)}
               onLoad={(pgn) => { setIsCustomPosition(false); return loadPgn(pgn) }}
             />
           )}
