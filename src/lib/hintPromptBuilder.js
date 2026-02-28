@@ -27,15 +27,6 @@ export function buildHintPrompt({ fen, turn, heuristics, bestMoveSan, fullHistor
   // Heuristics block WITHOUT engine lines (empty array) — we don't want to leak PV data
   const dataBlock = buildHeuristicsBlock(heuristics, [], phase)
 
-  let phaseGuidance = ''
-  if (phase === 'opening') {
-    phaseGuidance = 'Enfocate en principios de desarrollo, control del centro, o seguridad del rey.'
-  } else if (phase === 'middlegame') {
-    phaseGuidance = 'Enfocate en desequilibrios, debilidades posicionales, o motivos tácticos.'
-  } else {
-    phaseGuidance = 'Enfocate en actividad del rey, peones pasados, o técnica de finales.'
-  }
-
   return `FEN: ${fen}
 Turno: ${turnName} (jugada ${moveNumber}) — Fase: ${phaseName}
 ${movesStr ? `Partida: ${movesStr}` : ''}
@@ -44,7 +35,7 @@ ${dataBlock}
 
 MEJOR JUGADA (secreto, NO revelar): ${bestMoveSan}
 
-Generá una PISTA CONCEPTUAL sobre por qué esa jugada es buena. ${phaseGuidance} PROHIBIDO nombrar la jugada, la pieza que se mueve, o la casilla. Máximo 1-2 oraciones.`
+Generá una PISTA CONCEPTUAL sobre la idea específica detrás de ESA jugada. Analizá qué logra concretamente en la posición actual. PROHIBIDO nombrar la jugada, la pieza que se mueve, o la casilla. PROHIBIDO dar consejos genéricos que no se relacionen directamente con la jugada. Máximo 1-2 oraciones.`
 }
 
 /**
