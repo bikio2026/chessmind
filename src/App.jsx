@@ -471,7 +471,7 @@ export default function App() {
                     Turno: <span className="font-medium text-text">{turn === 'w' ? 'Blancas' : 'Negras'}</span>
                     {history.length > 0 && (
                       <span className="text-text-muted text-xs ml-1">
-                        ({Math.ceil(history.length / 2)} jugadas)
+                        (jugada {Math.floor((currentMoveIndex + 1) / 2) + 1}{history.length > currentMoveIndex + 1 ? ` de ${Math.ceil(history.length / 2)}` : ''})
                       </span>
                     )}
                   </div>

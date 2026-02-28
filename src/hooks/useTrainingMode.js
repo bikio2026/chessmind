@@ -350,6 +350,7 @@ export function useTrainingMode({
         threatMoveSan: threatSan,
         opponentColor,
         fullHistory,
+        heuristics,
       })
 
       await streamLLM(prompt, 'threat', threatAbortRef, (text) => {
