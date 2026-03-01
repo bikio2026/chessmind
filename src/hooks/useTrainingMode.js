@@ -41,6 +41,8 @@ function uciToArrow(uci, color) {
  * @param {Function} params.evaluateMove - From useTrainerEngine (fenBefore, fenAfter) => Promise
  * @param {Function} params.evaluatePosition - From useTrainerEngine (fen) => Promise<{score, bestMoveUci}>
  * @param {boolean} params.engineReady - Whether the trainer engine is ready
+ * @param {string} params.llmProvider - LLM provider from App state (claude/groq/ollama)
+ * @param {string} params.llmModel - LLM model from App state
  */
 export function useTrainingMode({
   bestMove,
@@ -53,6 +55,8 @@ export function useTrainingMode({
   evaluateMove,
   evaluatePosition,
   engineReady,
+  llmProvider,
+  llmModel,
 }) {
   // ── Toggle ──
   const [isTrainingMode, setIsTrainingMode] = useState(() => {
@@ -197,8 +201,8 @@ export function useTrainingMode({
 
   // ── LLM streaming helper ──
   const streamLLM = useCallback(async (prompt, promptVersion, abortRef, onToken) => {
-    let provider = localStorage.getItem('chessmind-llm-provider') || 'claude'
-    let model = localStorage.getItem('chessmind-llm-model') || ''
+    let provider = llmProvider || 'claude'
+    let model = llmModel || ''
 
     // Ollama not available in production
     if (provider === 'ollama') {
@@ -249,7 +253,7 @@ export function useTrainingMode({
     }
 
     return fullText
-  }, [])
+  }, [llmProvider, llmModel])
 
   // ── Request hint ──
   const requestHint = useCallback(async () => {
@@ -365,6 +369,38 @@ export function useTrainingMode({
       setIsLoadingThreats(false)
     }
   }, [showThreats, position, turn, engineReady, evaluatePosition, isGameOver, history, currentMoveIndex, streamLLM])
+
+  // ── Re-run threat LLM when provider/model changes ──
+  useEffect(() => {
+    if (!showThreats || !threatMoveSan || !position) return
+
+    const opponentColor = turn === 'w' ? 'Negras' : 'Blancas'
+    const fullHistory = currentMoveIndex >= 0
+      ? history.slice(0, currentMoveIndex + 1)
+      : []
+
+    const prompt = buildThreatPrompt({
+      fen: position,
+      turn,
+      threatMoveSan,
+      opponentColor,
+      fullHistory,
+      heuristics,
+    })
+
+    setIsLoadingThreats(true)
+    streamLLM(prompt, 'threat', threatAbortRef, (text) => {
+      setThreatText(text)
+    }).catch(err => {
+      if (err.name !== 'AbortError') {
+        setThreatText('No se pudo analizar las amenazas.')
+      }
+    }).finally(() => {
+      setIsLoadingThreats(false)
+    })
+    // Only re-run when LLM changes (streamLLM identity changes with provider/model)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streamLLM])
 
   // ── Attempt a move ──
   const attemptMove = useCallback(async (from, to, promotion) => {

@@ -65,21 +65,6 @@ export default function App() {
     providerStatus, analyze: llmAnalyze, checkHealth, clearNarrative, startOllama,
   } = useSemanticAnalysis()
 
-  // Training mode: dedicated engine for move evaluation + training state
-  const trainerEngine = useTrainerEngine()
-  const training = useTrainingMode({
-    bestMove,
-    position,
-    turn,
-    heuristics,
-    history,
-    currentMoveIndex,
-    isGameOver,
-    evaluateMove: trainerEngine.evaluateMove,
-    evaluatePosition: trainerEngine.evaluatePosition,
-    engineReady: trainerEngine.isReady,
-  })
-
   const [orientation, setOrientation] = useState('white')
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [pieceTheme, setPieceTheme] = useState(() => {
@@ -98,6 +83,23 @@ export default function App() {
   })
   const [llmModel, setLlmModel] = useState(() => {
     return localStorage.getItem('chessmind-llm-model') || ''
+  })
+
+  // Training mode: dedicated engine for move evaluation + training state
+  const trainerEngine = useTrainerEngine()
+  const training = useTrainingMode({
+    bestMove,
+    position,
+    turn,
+    heuristics,
+    history,
+    currentMoveIndex,
+    isGameOver,
+    evaluateMove: trainerEngine.evaluateMove,
+    evaluatePosition: trainerEngine.evaluatePosition,
+    engineReady: trainerEngine.isReady,
+    llmProvider,
+    llmModel,
   })
   const [promptVersion, setPromptVersion] = useState(() => {
     return localStorage.getItem('chessmind-prompt-version') || DEFAULT_VERSION
