@@ -6,6 +6,7 @@ import { useSemanticAnalysis } from './hooks/useSemanticAnalysis'
 import { useBoardEditor } from './hooks/useBoardEditor'
 import { useTrainerEngine } from './hooks/useTrainerEngine'
 import { useTrainingMode } from './hooks/useTrainingMode'
+import { useGuidedTraining } from './hooks/useGuidedTraining'
 import { buildAnalysisPrompt } from './lib/promptBuilder'
 import { PROMPT_VERSIONS, DEFAULT_VERSION } from './lib/promptVersions'
 import { pvToSan } from './lib/stockfishParser'
@@ -17,6 +18,7 @@ import { EvalBar } from './components/EvalBar'
 import { EnginePanel } from './components/EnginePanel'
 import { SemanticPanel } from './components/SemanticPanel'
 import { TrainingPanel } from './components/TrainingPanel'
+import { GuidedTrainingPanel } from './components/guided/GuidedTrainingPanel'
 import { PgnLoader } from './components/PgnLoader'
 import { GameLibrary } from './components/GameLibrary'
 import { PieceThemeSelector } from './components/PieceThemeSelector'
@@ -101,6 +103,22 @@ export default function App() {
     llmProvider,
     llmModel,
   })
+  // Guided training mode (parallel system, new files only)
+  const guided = useGuidedTraining({
+    position,
+    history,
+    currentMoveIndex,
+    turn,
+    isGameOver,
+    evaluateMove: trainerEngine.evaluateMove,
+    evaluatePosition: trainerEngine.evaluatePosition,
+    engineReady: trainerEngine.isReady,
+    llmProvider,
+    llmModel,
+    goToMove,
+    heuristics,
+  })
+
   const [promptVersion, setPromptVersion] = useState(() => {
     return localStorage.getItem('chessmind-prompt-version') || DEFAULT_VERSION
   })
@@ -225,37 +243,51 @@ export default function App() {
         return
       }
 
+      const blockNavigation = training.isTrainingMode || guided.isGuidedMode
+
       switch (e.key) {
-        case 'ArrowLeft': e.preventDefault(); goBack(); break
+        case 'ArrowLeft': e.preventDefault(); if (!guided.isGuidedMode) goBack(); break
         case 'ArrowRight':
           e.preventDefault()
-          if (!training.isTrainingMode) goForward()
+          if (!blockNavigation) goForward()
           break
-        case 'Home': e.preventDefault(); goToStart(); break
+        case 'Home': e.preventDefault(); if (!guided.isGuidedMode) goToStart(); break
         case 'End':
           e.preventDefault()
-          if (!training.isTrainingMode) goToEnd()
+          if (!blockNavigation) goToEnd()
           break
         case 'f': flipBoard(); break
+        case 'Enter':
+          // In guided mode: "Continuar" shortcut
+          if (guided.isGuidedMode && guided.currentPhase === 'feedback') {
+            e.preventDefault()
+            guided.continueTraining()
+          }
+          break
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [goBack, goForward, goToStart, goToEnd, flipBoard, editor.isEditMode, editor.exitEditMode, training.isTrainingMode])
+  }, [goBack, goForward, goToStart, goToEnd, flipBoard, editor.isEditMode, editor.exitEditMode, training.isTrainingMode, guided.isGuidedMode, guided.currentPhase, guided.continueTraining])
 
   // Board move handler: intercepts for training mode
   const hasFutureMoves = history.length > 0 && currentMoveIndex < history.length - 1
   const handleBoardMove = useCallback((from, to, promotion) => {
+    // Guided training: intercept moves
+    if (guided.isGuidedMode) {
+      if (guided.currentAttempt || guided.currentPhase !== 'waiting') return null
+      guided.attemptMove(from, to, promotion)
+      return null // Always snap back in guided mode
+    }
+    // Classic training mode
     if (training.isTrainingMode) {
-      if (training.moveAttempt) return null // Already have a pending attempt
-      // Evaluate the attempt
+      if (training.moveAttempt) return null
       training.attemptMove(from, to, promotion)
-      // If there's a loaded PGN with future moves, DON'T play (piece snaps back)
-      // If free position (no future moves), play normally
       if (hasFutureMoves) return null
     }
     return makeMove(from, to, promotion)
-  }, [training.isTrainingMode, training.moveAttempt, training.attemptMove, makeMove, hasFutureMoves])
+  }, [guided.isGuidedMode, guided.currentAttempt, guided.currentPhase, guided.attemptMove,
+    training.isTrainingMode, training.moveAttempt, training.attemptMove, makeMove, hasFutureMoves])
 
   // Training mode: advance after viewing feedback
   const handleTrainingAdvance = useCallback(() => {
@@ -378,7 +410,7 @@ export default function App() {
               )}
 
               <div className="flex gap-2">
-                {!editor.isEditMode && !training.isTrainingMode && (
+                {!editor.isEditMode && !training.isTrainingMode && !guided.isGuidedMode && (
                   <EvalBar score={currentScore} isGameOver={isGameOver} turn={turn} />
                 )}
                 <Board
@@ -387,7 +419,7 @@ export default function App() {
                   orientation={orientation}
                   lastMove={editor.isEditMode ? null : lastMove}
                   pieces={customPieces}
-                  arrows={training.isTrainingMode ? training.trainingArrows : []}
+                  arrows={guided.isGuidedMode ? guided.guidedArrows : training.isTrainingMode ? training.trainingArrows : []}
                   editMode={editor.isEditMode}
                   onEditPlace={editor.placePiece}
                   onEditRemove={editor.removePiece}
@@ -432,18 +464,18 @@ export default function App() {
                     <button onClick={goToStart} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Inicio (Home)">⏮</button>
                     <button onClick={goBack} className="px-2.5 py-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors text-sm" title="Atrás (←)">◀</button>
                     <button
-                      onClick={training.isTrainingMode ? undefined : goForward}
+                      onClick={(training.isTrainingMode || guided.isGuidedMode) ? undefined : goForward}
                       className={`px-2.5 py-1.5 bg-surface-alt rounded transition-colors text-sm ${
-                        training.isTrainingMode ? 'text-text-muted/30 cursor-not-allowed' : 'text-text-dim hover:text-text hover:bg-surface-light'
+                        (training.isTrainingMode || guided.isGuidedMode) ? 'text-text-muted/30 cursor-not-allowed' : 'text-text-dim hover:text-text hover:bg-surface-light'
                       }`}
-                      title={training.isTrainingMode ? 'Deshabilitado en modo entrenamiento' : 'Adelante (→)'}
+                      title={(training.isTrainingMode || guided.isGuidedMode) ? 'Deshabilitado en modo entrenamiento' : 'Adelante (→)'}
                     >▶</button>
                     <button
-                      onClick={training.isTrainingMode ? undefined : goToEnd}
+                      onClick={(training.isTrainingMode || guided.isGuidedMode) ? undefined : goToEnd}
                       className={`px-2.5 py-1.5 bg-surface-alt rounded transition-colors text-sm ${
-                        training.isTrainingMode ? 'text-text-muted/30 cursor-not-allowed' : 'text-text-dim hover:text-text hover:bg-surface-light'
+                        (training.isTrainingMode || guided.isGuidedMode) ? 'text-text-muted/30 cursor-not-allowed' : 'text-text-dim hover:text-text hover:bg-surface-light'
                       }`}
-                      title={training.isTrainingMode ? 'Deshabilitado en modo entrenamiento' : 'Final (End)'}
+                      title={(training.isTrainingMode || guided.isGuidedMode) ? 'Deshabilitado en modo entrenamiento' : 'Final (End)'}
                     >⏭</button>
                     <div className="w-px h-6 bg-surface-light mx-0.5" />
                     <button onClick={flipBoard} className="p-1.5 bg-surface-alt rounded text-text-dim hover:text-text hover:bg-surface-light transition-colors" title="Girar tablero (F)">
@@ -456,7 +488,10 @@ export default function App() {
                       <PenLine size={18} />
                     </button>
                     <button
-                      onClick={training.toggleTrainingMode}
+                      onClick={() => {
+                        if (guided.isGuidedMode) guided.toggleGuidedMode()
+                        training.toggleTrainingMode()
+                      }}
                       className={`p-1.5 rounded transition-colors ${
                         training.isTrainingMode
                           ? 'bg-accent/20 text-accent'
@@ -465,6 +500,20 @@ export default function App() {
                       title={training.isTrainingMode ? 'Desactivar modo entrenamiento' : 'Modo entrenamiento'}
                     >
                       <Target size={18} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (training.isTrainingMode) training.toggleTrainingMode()
+                        guided.toggleGuidedMode()
+                      }}
+                      className={`p-1.5 rounded transition-colors ${
+                        guided.isGuidedMode
+                          ? 'bg-move-book/20 text-move-book'
+                          : 'bg-surface-alt text-text-dim hover:text-text hover:bg-surface-light'
+                      }`}
+                      title={guided.isGuidedMode ? 'Desactivar entrenamiento guiado' : 'Entrenamiento guiado'}
+                    >
+                      <GraduationCap size={18} />
                     </button>
                   </div>
 
@@ -499,6 +548,14 @@ export default function App() {
                     <p><strong>FEN:</strong> editá el campo de texto debajo del tablero</p>
                   </div>
                 </div>
+              ) : guided.isGuidedMode ? (
+                /* Guided training mode */
+                <GuidedTrainingPanel
+                  guided={guided}
+                  history={history}
+                  currentMoveIndex={currentMoveIndex}
+                  onMoveClick={goToMove}
+                />
               ) : training.isTrainingMode ? (
                 /* Training mode panels */
                 <>
